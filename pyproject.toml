@@ -70,7 +70,19 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
-ignore = ["E501"]  # handled by formatter
+ignore = [
+    "E501",   # line length — handled by formatter
+    "RUF002", # ambiguous Unicode — EN DASH and EM DASH are intentional in citations
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Skogestad Column A code reproduces the published mathematical notation
+# (X, U, L, V, M, NT, NF, alpha, xB, yD, L0, V0, qF, zF, dMdt, dMxdt, ...).
+# Forcing snake_case here would break readability against the cited
+# Skogestad & Morari 1988 / Skogestad 1997 equations and the MATLAB source
+# at https://skoge.folk.ntnu.no/.../cola/.
+"src/industrial_ai/twin/column_a/**" = ["N803", "N806", "N815"]
+"tests/twin/**" = ["N803", "N806", "N815"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -85,6 +97,7 @@ module = [
     "langchain_core.*",
     "langchain_openai.*",
     "do_mpc.*",
+    "scipy.*",
 ]
 ignore_missing_imports = true
 
