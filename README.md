@@ -57,28 +57,32 @@ Concrete transfer targets:
 
 - **Process simulation:** IDAES (Pyomo)
 - **Control baseline:** Python PID with relay-feedback tuning
-- **Agent framework:** LangGraph + local Qwen3.5 (Ollama) / configurable API
+- **Agent framework:** LangGraph multi-agent (Observer / Optimizer / Critic)
+- **LLM:** Llama-3.3-Nemotron-Super-49B v1.5 (primary) / Qwen3.6-27B (ablation), served locally via LM Studio (MLX) — see [ADR 005](./docs/decisions/005-local-model-selection.md)
+- **LLM client:** `langchain-openai` against the local OpenAI-compatible endpoint — provider-agnostic, swappable to vLLM, Ollama, or remote APIs without code changes
 - **Anomaly detection:** Trained on TEP and/or NoBOOM benchmark datasets
-- **Evaluation:** matplotlib, pandas, statistical effect-size reporting
+- **Evaluation:** matplotlib, seaborn, statistical effect-size reporting
 
 ## Getting Started
 
 ```bash
-# Prerequisites: Python 3.11+, conda (recommended for IDAES)
+# Prerequisites: macOS (Apple Silicon) or Linux, Homebrew (macOS only)
+
+# Install uv (one-time)
+brew install uv                                    # macOS
+# curl -LsSf https://astral.sh/uv/install.sh | sh  # Linux
+
+# Clone and set up
 git clone <repo-url>
 cd IndustrialAI
+make setup       # uv sync + idaes get-extensions
 
-# Environment
-conda create -n industrialai python=3.11
-conda activate industrialai
-pip install -e ".[dev]"
-
-# Verify IDAES install
-idaes get-extensions --verbose
-
-# Run smoke test (once Phase 1 lands)
-pytest tests/test_smoke.py
+# Verify
+make smoke       # IDAES + ipopt sanity check
 ```
+
+For Apple-Silicon-specific notes and known pitfalls, see
+[`docs/setup/idaes_on_macos.md`](./docs/setup/idaes_on_macos.md).
 
 ## Repository Layout
 
