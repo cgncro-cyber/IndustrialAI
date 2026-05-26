@@ -7,7 +7,7 @@
 **Name:** IndustrialAI — Safety-Gated Agentic Control for Coupled Multivariable Processes
 **Type:** Public research project (GitHub repo → arXiv preprint → conference paper)
 **Owner:** Christian Rosenthal
-**Status:** Phase 0 (scaffolding)
+**Status:** Phase 1 (foundation — Skogestad Column A dynamic twin, per ADR 007)
 
 ## 2. Strategic Framing — Why This Project Exists
 
@@ -39,15 +39,20 @@ This is a **career-positioning project**, not a DBA-thesis project. The DBA work
 
 | Layer | Choice | Rationale |
 |---|---|---|
-| Process simulator | **IDAES** (Pyomo-based) | Python-native, runs on macOS, DOE-backed, paper-friendly |
-| Case study | **C3/C4 distillation train** (depropanizer + debutanizer) | Standard textbook system, max audience reach |
-| Baseline controller | Classical PID with relay-feedback tuning | Required for honest benchmarking |
+| Process simulator (steady-state, property packages) | **IDAES** (Pyomo-based) | Python-native, runs on macOS, DOE-backed, paper-friendly — see ADR 001 |
+| Process simulator (dynamic distillation) | **`scipy.integrate.solve_ivp`** on a Python port of Skogestad's Column A | IDAES `TrayColumn` is hard-coded `dynamic=False` (Issue #96); dynamics required for SAFEPROCESS "AI for Safety" KPIs — see ADR 001 Refinement and ADR 007 |
+| Case study | **Skogestad's "Column A"** — 40-stage binary distillation, LV/DV/L/D-V/B configurations, literature-validated trajectories | The canonical distillation control benchmark; supports dynamics; reviewer recognition; reproducible — see ADR 007 (supersedes ADR 002) |
+| Control architecture | **Two-layer hierarchical**: supervisory (5–15 min) over regulatory PID (~1–5 s) | Industrial APC standard; decouples LLM latency from real-time control — see ADR 006 |
+| Regulatory layer (held constant across all configurations) | Classical multi-loop PID (top composition, bottom composition, condenser level, reboiler level) with relay-feedback tuning | Identical under PID-only / MPC / Agent / Agent+Safety — see ADR 006 |
+| Supervisory baseline C0 | PID-only with fixed manual setpoints | Do-nothing baseline that quantifies the value of any supervisor |
+| Supervisory baseline C1 | **Linear MPC via `do-mpc`**, linearization point from `column_a/linearize.py` | Industrial state-of-the-art baseline; pre-empts the strongest reviewer objection |
+| Supervisory C2 / C3 | Agentic LangGraph controller (with optional safety gate) | The contribution under study |
 | Agent framework | **LangGraph** | Stateful multi-agent, good Python integration |
 | LLM runtime | **LM Studio** on Mac Studio M3 Ultra (96 GB) | Native MLX acceleration for Apple Silicon, OpenAI-compatible server on `http://localhost:1234/v1` |
 | LLM (primary) | **Llama-3.3-Nemotron-Super-49B v1.5** (MLX preferred, GGUF Q4 fallback) | Agentic post-training (RAG + tool calling), NVIDIA brand, comfortable RAM fit — see ADR 005 |
 | LLM (ablation) | **Qwen3.6-27B** dense, Apache 2.0 (MLX preferred) | Robustness check across model family / license / architecture |
 | LLM client library | `langchain-openai` against the LM Studio endpoint | Framework-agnostic — swappable to vLLM, Ollama, or remote provider without code change |
-| Safety layer | Anomaly detector trained on TEP and/or NoBOOM | Gates agent setpoints before execution |
+| Safety layer | Anomaly detector, cross-domain validation (TEP → Skogestad Column A) primary, in-domain fallback | Gates agent setpoints before execution; cross-domain transfer is itself a publishable sub-result |
 | Eval/Plots | matplotlib + seaborn, no plotly | Paper-print compatible |
 | License | MIT | Maximum reach, no fake formality |
 
@@ -55,7 +60,7 @@ See `docs/decisions/` for ADR-style rationales.
 
 ## 6. Five-Phase Plan
 
-See `PROJECT_PLAN.md`. Do not skip phases. **Phase 2 (PID baseline) is non-negotiable** — without it the agent claims are unfalsifiable and the paper is unpublishable.
+See `PROJECT_PLAN.md`. Do not skip phases. **Phase 2 (PID + Linear MPC baselines) is non-negotiable** — without the MPC baseline, the paper is vulnerable to the strongest reviewer objection.
 
 **Hard anchor: SAFEPROCESS 2027 submission deadline 31 October 2026.**
 
@@ -73,15 +78,17 @@ See `PROJECT_PLAN.md`. Do not skip phases. **Phase 2 (PID baseline) is non-negot
 
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`)
 - One logical change per commit
-- Reference the phase in commit body when relevant: `Phase 2: baseline PID tuning for column 1`
+- Reference the phase in commit body when relevant: `Phase 2: baseline PID tuning for Column A LV configuration`
 
 ## 9. Reproducibility Rules
 
 Every experimental run must produce:
-1. A versioned config file (YAML) capturing all hyperparameters
-2. Deterministic seeds where applicable
-3. A logged manifest of input data hashes
-4. Output plots regenerable from a single `make reproduce` target
+1. A versioned config file (YAML) capturing all hyperparameters.
+2. Deterministic seeds where applicable.
+3. A logged manifest of input data hashes.
+4. Output plots regenerable from a single `make reproduce` target.
+5. **Stochastic accounting for any LLM-in-the-loop configuration**: each scenario evaluated over N ≥ 10 independent seed runs; KPIs reported with bootstrap confidence intervals and Cohen's d effect sizes, never as point estimates. Practical-significance thresholds are defined *before* the final runs, not after. See PROJECT_PLAN Phase 5.
+6. **Data-logging contract** per `docs/figures.md`: every Phase 1+ run must populate `data/runs/<config>/<scenario>/<seed>/` with `timeseries.parquet`, `tray_profile.parquet`, `setpoints.parquet`, `kpis.json`, `latency.json`, `safety_log.parquet` (C3 only), `config.yaml`, `manifest.json`. Without this contract, later phases cannot regenerate figures.
 
 ## 10. Publication Strategy (locked)
 
@@ -89,9 +96,9 @@ Three-tier path, sequenced for speed:
 
 1. **arXiv preprint** — *primary* career-positioning asset. Cross-listed `cs.LG` + `eess.SY`. Goes live the day Phase 5 completes.
 2. **SAFEPROCESS 2027** — IFAC conference, Delft NL, 29 Jun – 2 Jul 2027. Theme "AI for Safety" matches novelty claim. **Paper deadline: 31 October 2026.** 6-page IFAC format, derived from the arXiv preprint. Proceedings on IFAC-PapersOnline (Scopus-indexed).
-3. **Journal version** — *explicitly deferred*, optional. Computers & Chemical Engineering or Journal of Process Control as later targets. Not blocking the job-search use case.
+3. **Journal version** — *explicitly deferred*, optional. *Computers & Chemical Engineering* or *Journal of Process Control* as later targets. Not blocking the job-search use case.
 
-Working title: *"Safety-Gated Agentic Control of Coupled Distillation Trains: A Case Study in Industrial-AI Methodology Transfer"*.
+Working title: *"Safety-Gated Agentic Control of Multivariable Distillation: A Case Study in Industrial-AI Methodology Transfer"*.
 
 See `docs/decisions/004-publication-strategy.md` for the full rationale, and `paper/manuscript.md` once Phase 5 begins.
 
@@ -100,11 +107,14 @@ See `docs/decisions/004-publication-strategy.md` for the full rationale, and `pa
 - If a design decision is irreversible or affects the paper's claim of novelty → STOP and ask Christian.
 - If a decision is minor and reversible → make it, document in `docs/decisions/`, move on.
 - If Momentive-relevant context creeps in → strip it, do not commit.
+- **If something in IDAES, Skogestad's MATLAB code, or any external dependency looks broken or unsupported** → verify with primary sources (IDAES GitHub issues, NTNU code, peer-reviewed papers) *before* writing a workaround. Hidden framework limitations like IDAES Issue #96 are exactly the kind of trap that wastes days if discovered late.
 
 ## 12. Out of Scope (do not implement, do not suggest)
 
-- Real-time DCS/PLC integration (this is a simulation study)
-- Reinforcement learning from scratch (use LLM-agent paradigm only — that's the novelty)
-- Web dashboards / Streamlit apps (paper-grade plots only)
-- Cloud deployment, Docker images for production (Dockerfile for *reproducibility* is fine)
-- Journal submission before the SAFEPROCESS deadline (explicitly deferred — see ADR 004)
+- Real-time DCS/PLC integration (this is a simulation study).
+- Direct actuator manipulation by the agent (violates ADR 006 hierarchy).
+- Reinforcement learning from scratch (use LLM-agent paradigm only — that's the novelty).
+- Web dashboards / Streamlit apps (paper-grade plots only).
+- Cloud deployment, Docker images for production (Dockerfile for *reproducibility* is fine).
+- Journal submission before the SAFEPROCESS deadline (explicitly deferred — see ADR 004).
+- Multi-component distillation in IDAES `TrayColumn` (framework does not support dynamics — see ADR 001 Refinement, ADR 007).
