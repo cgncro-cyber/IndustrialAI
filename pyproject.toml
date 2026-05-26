@@ -29,6 +29,8 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.12",
     "pandas>=2.2",
+    # Parquet backend for the data-logging contract (docs/figures.md).
+    "pyarrow>=15.0",
     # Linear MPC baseline (configuration C1, see ADR 006)
     "do-mpc>=5.0",
     # Agentic layer
@@ -81,7 +83,7 @@ ignore = [
 # Forcing snake_case here would break readability against the cited
 # Skogestad & Morari 1988 / Skogestad 1997 equations and the MATLAB source
 # at https://skoge.folk.ntnu.no/.../cola/.
-"src/industrial_ai/twin/column_a/**" = ["N803", "N806", "N815"]
+"src/industrial_ai/twin/**" = ["N803", "N806", "N815"]
 "tests/twin/**" = ["N803", "N806", "N815"]
 
 [tool.mypy]
@@ -98,6 +100,8 @@ module = [
     "langchain_openai.*",
     "do_mpc.*",
     "scipy.*",
+    "pandas.*",
+    "yaml",
 ]
 ignore_missing_imports = true
 
