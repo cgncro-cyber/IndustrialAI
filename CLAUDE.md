@@ -22,7 +22,12 @@ This is a **career-positioning project**, not a DBA-thesis project. The DBA work
 - MIT Applied Data Science alumnus.
 - Strong domain intuition for chemical processes — does NOT need basic explanations of distillation, VLE, or PID tuning.
 - **Prefers brief, to-the-point explanations.** No fluff, no hedging, no over-apologizing.
-- German native, working language English for code/docs.
+- German native.
+
+**Language policy (strict):**
+- **Chat in this session: German.** Reply to Christian in German unless he switches.
+- **Everything written to disk or to GitHub: English.** This includes source code, comments, docstrings, commit messages, PR titles and descriptions, issue text, branch names, ADRs, README, paper drafts, notebook markdown cells, and any other artifact that lives in the repo or on GitHub.
+- If a chat answer references code or a commit message, the surrounding explanation stays in German but the quoted artifact stays in English.
 
 ## 4. Hard Boundaries
 
