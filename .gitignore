@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_meta
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Data — keep structure, ignore contents (except small reference files <100kB)
+data/raw/
+data/processed/
+data/cache/
+*.parquet
+*.h5
+*.pkl
+
+# Outputs / artifacts
+runs/
+results/
+*.png
+!docs/**/*.png
+!paper/figures/*.png
+
+# Secrets
+.env
+.env.local
+*.key
+
+# OS
+Thumbs.db
+
+# Pyomo / IDAES temporary files
+*.nl
+*.sol
+tmp_solve/

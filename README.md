@@ -1,0 +1,119 @@
+# IndustrialAI
+
+**Safety-Gated Agentic Control for Coupled Multivariable Processes**
+
+A reproducible research project demonstrating how LLM-based agentic controllers, combined with an anomaly-detection safety layer, can outperform classical control on coupled multivariable industrial processes — with a distillation train as the case study.
+
+> The chemistry is the demonstration. The methodology is the contribution. The architecture transfers to semiconductor process control, pharmaceutical continuous manufacturing, battery electrode lines, energy systems, and beyond.
+
+---
+
+## Status
+
+🚧 **Phase 0 — Scaffolding.** See [`PROJECT_PLAN.md`](./PROJECT_PLAN.md) for the five-phase roadmap.
+
+## Why this matters beyond distillation
+
+This architecture transfers to any process with:
+
+- Coupled multivariable loops where classical PID hits its limits
+- High constraint-violation costs (quality, safety, energy)
+- Significant gains available from anticipatory rather than reactive control
+
+Concrete transfer targets:
+
+- **Semiconductor wafer fabs** — multi-zone temperature/gas control with tight spec windows
+- **Pharma continuous manufacturing** — coupled crystallization/drying/granulation trains
+- **Battery electrode coating** — coupled slot-die, drying, calendering with quality gates
+- **HVAC and district heating** — multi-loop energy optimization with safety constraints
+- **Water treatment plants** — coupled chemical dosing with effluent-spec safety
+
+## Architecture (high level)
+
+```
+                    ┌────────────────────────┐
+                    │  Process Twin (IDAES)  │
+                    │  C3/C4 Distillation    │
+                    └───────────┬────────────┘
+                                │ state
+                  ┌─────────────┴─────────────┐
+                  ▼                           ▼
+        ┌──────────────────┐        ┌──────────────────┐
+        │  Baseline: PID   │        │  Agentic Layer   │
+        │  (benchmark)     │        │  (LangGraph)     │
+        └──────────────────┘        └────────┬─────────┘
+                                             │ proposed setpoints
+                                             ▼
+                                  ┌──────────────────────┐
+                                  │  Safety Gate         │
+                                  │  (Anomaly Detector)  │
+                                  └────────┬─────────────┘
+                                           │ accepted setpoints
+                                           ▼
+                                     back to Twin
+```
+
+## Tech Stack
+
+- **Process simulation:** IDAES (Pyomo)
+- **Control baseline:** Python PID with relay-feedback tuning
+- **Agent framework:** LangGraph + local Qwen3.5 (Ollama) / configurable API
+- **Anomaly detection:** Trained on TEP and/or NoBOOM benchmark datasets
+- **Evaluation:** matplotlib, pandas, statistical effect-size reporting
+
+## Getting Started
+
+```bash
+# Prerequisites: Python 3.11+, conda (recommended for IDAES)
+git clone <repo-url>
+cd IndustrialAI
+
+# Environment
+conda create -n industrialai python=3.11
+conda activate industrialai
+pip install -e ".[dev]"
+
+# Verify IDAES install
+idaes get-extensions --verbose
+
+# Run smoke test (once Phase 1 lands)
+pytest tests/test_smoke.py
+```
+
+## Repository Layout
+
+```
+src/industrial_ai/
+├── twin/          # IDAES process models
+├── control/       # PID baselines + tuning
+├── agents/        # LangGraph agents
+├── safety/        # Anomaly detection gate
+└── evaluation/    # KPIs, plots, statistical tests
+
+tests/             # Unit + integration tests
+notebooks/         # Exploratory work, never source of truth
+data/              # Benchmark datasets (TEP, NoBOOM references)
+paper/             # LaTeX/Markdown manuscript
+docs/decisions/    # ADRs — architecture decision records
+```
+
+## Citation
+
+Once published:
+
+```bibtex
+@article{rosenthal2026safety,
+  title  = {Safety-Gated Agentic Control of Coupled Distillation Trains},
+  author = {Rosenthal, Christian},
+  year   = {2026},
+  journal= {tbd},
+}
+```
+
+## License
+
+MIT — see [`LICENSE`](./LICENSE).
+
+## About the Author
+
+Christian Rosenthal is a Product Manager and Lean Six Sigma Black Belt with 15+ years of experience optimizing chemical processes at industrial scale, currently completing a DBA in AI/ML. This project bridges classical process engineering with contemporary agentic AI.

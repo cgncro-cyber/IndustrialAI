@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "industrial-ai"
+version = "0.0.1"
+description = "Safety-gated agentic control for coupled multivariable processes — distillation case study."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Christian Rosenthal" }]
+keywords = [
+    "industrial-ai",
+    "agentic-control",
+    "process-control",
+    "digital-twin",
+    "anomaly-detection",
+    "idaes",
+    "langgraph",
+]
+
+dependencies = [
+    # Process simulation
+    "idaes-pse>=2.5",
+    "pyomo>=6.7",
+    # Numerics / data
+    "numpy>=1.26",
+    "scipy>=1.12",
+    "pandas>=2.2",
+    # Agentic layer
+    "langgraph>=0.2",
+    "langchain-core>=0.3",
+    "langchain-ollama>=0.2",
+    # ML / anomaly detection
+    "scikit-learn>=1.4",
+    "torch>=2.2",
+    # Configs & reproducibility
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "rich>=13.7",
+    # Plotting (paper-grade)
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "pre-commit>=3.7",
+    "jupyterlab>=4.1",
+    "ipykernel>=6.29",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]  # handled by formatter
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["idaes.*", "pyomo.*", "langgraph.*", "langchain_core.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-ra --cov=industrial_ai --cov-report=term-missing"
+testpaths = ["tests"]
