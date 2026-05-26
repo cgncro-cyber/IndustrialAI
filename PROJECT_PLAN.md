@@ -18,28 +18,32 @@ The project follows a strict two-layer hierarchical control architecture — see
 
 **Case study choice:** Skogestad's Column A — 40-stage binary distillation, relative volatility 1.5, 99 % purity products, with LV, DV, and L/D-V/B configurations (see ADR 007). Single column for Phase 1; extension to a two-column direct sequence is a deferred Phase 2 decision-junction if PID and Linear MPC results turn out too close.
 
+### Progress snapshot (Day 4 mini-gate passed, 2026-05-26)
+
+Day 1–4 deliverables landed in commits `6f88ce9` (core ODE + integrator + steady state), `1079c39` (LV + regulatory PID + setpoint interface + data-logging contract), `7e15787` (linearize + mini-gate). The Day-4 mini-gate is green: G^LV(0) matches Skogestad 1997 Eq. (31) within 0.01 %, τ₁ within 0.04 %, τ₂/τ₃ within 0.5 %/0.3 %, and three Octave-cross-checked step trajectories (L +1 %, z_F −10 %, F +10 %) match within 1e-6. 45 pytest cases pass, twin-layer coverage 96 %. `linearize.py` was pulled forward from Day 7 because the mini-gate's paper-defensive scalar checks need it.
+
 ### Deliverables — `src/industrial_ai/twin/column_a/`
 
 Module layout, derived from the published MATLAB code at `https://skoge.folk.ntnu.no/book/1st_edition/matlab_m/cola/` (clean-room re-implementation, citing Skogestad & Morari 1988 IECR 27:1848 and Skogestad 1997 Trans IChemE 75:539):
 
-| Python Module | MATLAB Source | Contents |
-|---|---|---|
-| `column_a/model.py` | `colamod.m` | Core nonlinear ODE `f(t, x, u, p) → dx/dt` with 82 states (41 stage compositions + 41 stage holdups). |
-| `column_a/integrator.py` | `cola4.m` | `scipy.integrate.solve_ivp` wrapper (LSODA or Radau for stiff initialization phase). |
-| `column_a/steady_state.py` | `cola_init.m` | Newton–Krylov solver for steady-state initialization. |
-| `column_a/configurations/lv.py` | `cola_lv.m` | LV configuration: P-controllers on D and B level loops. **Phase 1 primary.** |
-| `column_a/configurations/dv.py` | `cola_dv.m` | DV configuration. |
-| `column_a/configurations/ldvb.py` | `cola_rr.m` | L/D–V/B double-ratio configuration. |
-| `column_a/linearize.py` | `cola_linearize.m` | Numerical Jacobian for Phase 2 Linear MPC (do-mpc). |
+| Status | Python Module | MATLAB Source | Contents |
+|---|---|---|---|
+| ✓ | `column_a/model.py` | `colamod.m` | Core nonlinear ODE `f(t, x, u, p) → dx/dt` with 82 states (41 stage compositions + 41 stage holdups). |
+| ✓ | `column_a/integrator.py` | `cola4.m` | `scipy.integrate.solve_ivp` wrapper (LSODA or Radau for stiff initialization phase). |
+| ✓ | `column_a/steady_state.py` | `cola_init.m` | Newton–Krylov solver for steady-state initialization. |
+| ✓ | `column_a/configurations/lv.py` | `cola_lv.m` | LV configuration: P-controllers on D and B level loops. **Phase 1 primary.** |
+| — | `column_a/configurations/dv.py` | `cola_dv.m` | DV configuration. |
+| — | `column_a/configurations/ldvb.py` | `cola_rr.m` | L/D–V/B double-ratio configuration. |
+| ✓ | `column_a/linearize.py` | `cola_linearize.m` | Numerical Jacobian for Phase 2 Linear MPC (do-mpc). |
 
 ### Deliverables — supporting infrastructure
 
-- `src/industrial_ai/twin/regulatory_pid.py` — embedded multi-loop PID, identical across configurations per ADR 006 (top-composition loop, bottom-composition loop, condenser-level loop, reboiler-level loop). Used by all four supervisory configurations C0/C1/C2/C3.
-- `src/industrial_ai/twin/setpoint_interface.py` — uniform setpoint ingress with rate-limiter / ramping logic per ADR 006.
-- `tests/test_column_a_against_matlab.py` — pytest regression against 3–4 published Skogestad reference trajectories (steady-state stage profiles + open-loop step responses to L, V, F, z_F changes).
-- `notebooks/01_twin_walkthrough.ipynb` — guided tour: column construction, initialization, a representative LV-configuration step response.
-- `data/baseline_operating_window.csv` — ≥1000 logged steady-state points across nominal operating window.
-- `src/industrial_ai/twin/column_a/assumptions.md` — every modeling assumption documented: binary mixture, constant pressure, constant relative volatility, equilibrium on all stages, total condenser, constant molar flows, no vapor holdup, linearized liquid dynamics with K2-vapor-flow effect, plus all numerical-method choices.
+- ✓ `src/industrial_ai/twin/regulatory_pid.py` — embedded multi-loop PID, identical across configurations per ADR 006 (top-composition loop, bottom-composition loop, condenser-level loop, reboiler-level loop). Used by all four supervisory configurations C0/C1/C2/C3.
+- ✓ `src/industrial_ai/twin/setpoint_interface.py` — uniform setpoint ingress with rate-limiter / ramping logic per ADR 006.
+- ✓ `tests/test_column_a_against_matlab.py` — pytest regression against 3–4 published Skogestad reference trajectories (steady-state stage profiles + open-loop step responses to L, V, F, z_F changes).
+- — `notebooks/01_twin_walkthrough.ipynb` — guided tour: column construction, initialization, a representative LV-configuration step response.
+- — `data/baseline_operating_window.csv` — ≥1000 logged steady-state points across nominal operating window.
+- — `src/industrial_ai/twin/column_a/assumptions.md` — every modeling assumption documented: binary mixture, constant pressure, constant relative volatility, equilibrium on all stages, total condenser, constant molar flows, no vapor holdup, linearized liquid dynamics with K2-vapor-flow effect, plus all numerical-method choices.
 
 ### Data-logging contract (required for Phases 3–5 figures)
 
@@ -62,12 +66,12 @@ Without this logging contract in place at the end of Phase 1, no later phase's f
 
 ### Gate
 
-- Pytest regression tests pass against the published Skogestad reference trajectories within agreed numerical tolerances (steady-state values: ±1 %, step-response shape: visual + L2 norm under threshold).
-- Twin converges across the full intended LV operating window without manual intervention.
-- Energy and mass balances close to within 0.1 % at steady state.
-- Three independent disturbance scenarios (feed-rate step, feed-composition step, reflux step) run end-to-end and write the full data-logging contract.
-- Setpoint rate-limiter prevents solver divergence on ±20 % step changes.
-- `assumptions.md` lists every modeling assumption with citation back to Skogestad & Morari 1988 / Skogestad 1997 where applicable.
+- ✓ Pytest regression tests pass against the published Skogestad reference trajectories within agreed numerical tolerances (steady-state values: ±1 %, step-response shape: visual + L2 norm under threshold). *Day-4 mini-gate cleared with margin: G^LV(0) Eq. (31) ±5 % spec → 0.01 % actual; τ₁ ±2 % spec → 0.04 % actual; three Octave trajectories rel ≤ 1e-6.*
+- — Twin converges across the full intended LV operating window without manual intervention.
+- — Energy and mass balances close to within 0.1 % at steady state.
+- — Three independent disturbance scenarios (feed-rate step, feed-composition step, reflux step) run end-to-end and write the full data-logging contract.
+- — Setpoint rate-limiter prevents solver divergence on ±20 % step changes.
+- — `assumptions.md` lists every modeling assumption with citation back to Skogestad & Morari 1988 / Skogestad 1997 where applicable.
 
 ---
 

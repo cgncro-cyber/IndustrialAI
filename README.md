@@ -10,7 +10,7 @@ A reproducible research project demonstrating how LLM-based agentic controllers,
 
 ## Status
 
-🚧 **Phase 0 — Scaffolding.** See [`PROJECT_PLAN.md`](./PROJECT_PLAN.md) for the five-phase roadmap.
+🚧 **Phase 1 — Foundation in progress.** Skogestad Column A twin port (per [ADR 007](./docs/decisions/007-skogestad-column-a-over-c3c4-train.md)). Day-4 mini-gate passed against published Skogestad 1997 references (G^LV(0) to within 0.01 %, dominant time constant τ₁ to within 0.04 %, three Octave-cross-checked step-response trajectories within 1e-6). DV / L-D-V-B configurations, operating-window sweep, and the walkthrough notebook still pending. See [`PROJECT_PLAN.md`](./PROJECT_PLAN.md) for the full five-phase roadmap and remaining Phase-1 deliverables.
 
 ## Why this matters beyond distillation
 
