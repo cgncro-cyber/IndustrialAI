@@ -31,7 +31,10 @@ dependencies = [
     # Agentic layer
     "langgraph>=0.2",
     "langchain-core>=0.3",
-    "langchain-ollama>=0.2",
+    # OpenAI-compatible client — used against the local LM Studio endpoint
+    # (http://localhost:1234/v1). Framework-agnostic: also works with
+    # Ollama, vLLM, llama.cpp server, or remote providers without code changes.
+    "langchain-openai>=0.2",
     # ML / anomaly detection
     "scikit-learn>=1.4",
     "torch>=2.2",
@@ -72,7 +75,7 @@ strict = true
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["idaes.*", "pyomo.*", "langgraph.*", "langchain_core.*"]
+module = ["idaes.*", "pyomo.*", "langgraph.*", "langchain_core.*", "langchain_openai.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

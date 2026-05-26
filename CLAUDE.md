@@ -38,7 +38,10 @@ This is a **career-positioning project**, not a DBA-thesis project. The DBA work
 | Case study | **C3/C4 distillation train** (depropanizer + debutanizer) | Standard textbook system, max audience reach |
 | Baseline controller | Classical PID with relay-feedback tuning | Required for honest benchmarking |
 | Agent framework | **LangGraph** | Stateful multi-agent, good Python integration |
-| LLM | Local Qwen3.5 via Ollama for dev; configurable to API models for runs | Reproducibility + cost control |
+| LLM runtime | **LM Studio** on Mac Studio M3 Ultra (96 GB) | Native MLX acceleration for Apple Silicon, OpenAI-compatible server on `http://localhost:1234/v1` |
+| LLM (primary) | **Llama-3.3-Nemotron-Super-49B v1.5** (MLX preferred, GGUF Q4 fallback) | Agentic post-training (RAG + tool calling), NVIDIA brand, comfortable RAM fit — see ADR 005 |
+| LLM (ablation) | **Qwen3.6-27B** dense, Apache 2.0 (MLX preferred) | Robustness check across model family / license / architecture |
+| LLM client library | `langchain-openai` against the LM Studio endpoint | Framework-agnostic — swappable to vLLM, Ollama, or remote provider without code change |
 | Safety layer | Anomaly detector trained on TEP and/or NoBOOM | Gates agent setpoints before execution |
 | Eval/Plots | matplotlib + seaborn, no plotly | Paper-print compatible |
 | License | MIT | Maximum reach, no fake formality |
