@@ -13,8 +13,9 @@ import pytest
 #: Path to the published Skogestad steady-state reference data, extracted
 #: from ``cola_init.mat`` at
 #: https://skoge.folk.ntnu.no/book/1st_edition/matlab_m/cola/cola_init.mat
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 SKOGESTAD_REFERENCE_PATH = (
-    Path(__file__).parents[2] / "data" / "reference" / "skogestad_column_a_steady_state.json"
+    _REPO_ROOT / "data" / "reference" / "skogestad_column_a_steady_state.json"
 )
 
 

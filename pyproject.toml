@@ -84,7 +84,7 @@ ignore = [
 # Skogestad & Morari 1988 / Skogestad 1997 equations and the MATLAB source
 # at https://skoge.folk.ntnu.no/.../cola/.
 "src/industrial_ai/twin/**" = ["N803", "N806", "N815"]
-"tests/twin/**" = ["N803", "N806", "N815"]
+"tests/**" = ["N803", "N806", "N815"]
 
 [tool.mypy]
 python_version = "3.11"
