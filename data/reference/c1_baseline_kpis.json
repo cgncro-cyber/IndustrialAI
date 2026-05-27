@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-05-27T20:18:45.937418+00:00",
+  "git_sha": "4ed286837f0e7b8d562c544fbcec88f50ccd44e0",
+  "operating_point": {
+    "case": "Skogestad Column A, nominal SS",
+    "F_kmol_per_min": 1.0,
+    "zF": 0.5,
+    "qF": 1.0
+  },
+  "mpc_config": {
+    "sampling_time_min": 5.0,
+    "n_horizon": 20,
+    "q_top": 10000.0,
+    "q_bottom": 10000.0,
+    "r_lt": 0.1,
+    "r_vb": 0.1
+  },
+  "aggregate": {
+    "c0_iae": 0.8362269141725175,
+    "c1_iae": 0.12237548125116987,
+    "ratio_c0_over_c1": 6.833288054297424,
+    "scenarios_won_by_c1": 5,
+    "gate_passed": true
+  },
+  "scenarios": {
+    "F_step_+20pct": {
+      "success": true,
+      "c0_iae_mole_fraction_min": 0.33115427978893275,
+      "c1_iae_mole_fraction_min": 0.013022300038030735,
+      "ratio_c0_over_c1": 25.429784202623143,
+      "winner": "C1",
+      "max_cycle_wall_clock_seconds": 0.34372891698149033,
+      "specific_energy_kmol_per_kmol": 6.467244069453025,
+      "light_yield": 0.9698248821118456,
+      "constraint_violations": 857,
+      "settling_time_min": 10.15,
+      "mv_activity_kmol_per_min": 1.211539587944665,
+      "iae_mole_fraction_min": 0.013022300038030735
+    },
+    "F_step_-20pct": {
+      "success": true,
+      "c0_iae_mole_fraction_min": 0.3037787718521129,
+      "c1_iae_mole_fraction_min": 0.02057515420509729,
+      "ratio_c0_over_c1": 14.764349701780349,
+      "winner": "C1",
+      "max_cycle_wall_clock_seconds": 0.34056908398633823,
+      "specific_energy_kmol_per_kmol": 6.344419788099935,
+      "light_yield": 1.0191777941007665,
+      "constraint_violations": 737,
+      "settling_time_min": 10.15,
+      "mv_activity_kmol_per_min": 1.3470079420191787,
+      "iae_mole_fraction_min": 0.02057515420509729
+    },
+    "zF_step_+10pct": {
+      "success": true,
+      "c0_iae_mole_fraction_min": 0.018017112466724848,
+      "c1_iae_mole_fraction_min": 0.011833812468038017,
+      "ratio_c0_over_c1": 1.5225112376410668,
+      "winner": "C1",
+      "max_cycle_wall_clock_seconds": 0.33836987501126714,
+      "specific_energy_kmol_per_kmol": 5.9986743585123055,
+      "light_yield": 0.9801204089850789,
+      "constraint_violations": 439,
+      "settling_time_min": 2.6500000000000004,
+      "mv_activity_kmol_per_min": 0.26002505206372994,
+      "iae_mole_fraction_min": 0.011833812468038017
+    },
+    "zF_step_-10pct": {
+      "success": true,
+      "c0_iae_mole_fraction_min": 0.017931280693967704,
+      "c1_iae_mole_fraction_min": 0.005644782484649873,
+      "ratio_c0_over_c1": 3.176611453626263,
+      "winner": "C1",
+      "max_cycle_wall_clock_seconds": 0.30647208300069906,
+      "specific_energy_kmol_per_kmol": 6.892713418316479,
+      "light_yield": 1.0020899843208493,
+      "constraint_violations": 190,
+      "settling_time_min": 0.0,
+      "mv_activity_kmol_per_min": 0.07891730161298582,
+      "iae_mole_fraction_min": 0.005644782484649873
+    },
+    "yD_setpoint_+0p5pct": {
+      "success": true,
+      "c0_iae_mole_fraction_min": 0.16534546937077932,
+      "c1_iae_mole_fraction_min": 0.07129943205535395,
+      "ratio_c0_over_c1": 2.3190292629878435,
+      "winner": "C1",
+      "max_cycle_wall_clock_seconds": 0.30754945799708366,
+      "specific_energy_kmol_per_kmol": 7.146410894462744,
+      "light_yield": 0.9610030705182931,
+      "constraint_violations": 1118,
+      "settling_time_min": 7.850000000000001,
+      "mv_activity_kmol_per_min": 0.978678928109403,
+      "iae_mole_fraction_min": 0.07129943205535395
+    }
+  }
+}

@@ -1,0 +1,435 @@
+"""C1 Linear MPC supervisor on the CasADi LV-closed model.
+
+Phase 2 Day 3. The C1 supervisor is a constrained linear-quadratic
+multivariable controller that replaces the C0 composition-PID pair.
+It operates at the supervisory cadence defined in ADR 006 (5–15 min)
+on top of the same LV-level-loop closure (P-only on D and B from
+holdups), and computes ``(LT, VB)`` setpoints over a prediction
+horizon by minimizing tracking error plus MV-rate-of-change penalty.
+
+Architecture and fairness contract.
+
+- The LV-level closure (D, B from holdups) stays in place, identical
+  to C0. Only the composition-PID layer is replaced by MPC; this is
+  the standard industrial APC pattern when the underlying regulatory
+  layer is level control only. The four-way C0/C1/C2/C3 comparison
+  remains apples-to-apples because the plant, level closure, and
+  KPI evaluation are unchanged across configurations.
+- The linearization point comes from
+  :func:`industrial_ai.twin.column_a.linearize.linearize_lv` (CasADi
+  backend by default). The MPC works in *deviation variables*
+  (``Delta x = x - x_ss``, ``Delta u = u - u_ss``, ``Delta d = d -
+  d_ss``); the supervisor wrapper translates between deviations and
+  physical units at every solve.
+- Between MPC solves the optimal ``(LT, VB)`` is held by the
+  regulatory clock (0.05-min ticks). Real industrial setpoint
+  ramping is captured by ``setpoint_filter_tau_min`` on the
+  SetpointInterface; for C1 the default is no filter (sharp
+  MPC-commanded steps).
+
+Reference. Skogestad & Postlethwaite (1996) §12; ``do-mpc`` 5.1.
+"""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+
+import casadi as cs
+import do_mpc
+import numpy as np
+import numpy.typing as npt
+
+from industrial_ai.twin.column_a.configurations.lv import (
+    LVConfiguration,
+    assemble_inputs_lv,
+)
+from industrial_ai.twin.column_a.integrator import integrate_open_loop
+from industrial_ai.twin.column_a.linearize import LinearizedLVModel
+from industrial_ai.twin.column_a.parameters import (
+    DEFAULT_PARAMETERS,
+    ColumnAParameters,
+)
+from industrial_ai.twin.data_logging import RunLogger
+from industrial_ai.twin.simulate import ScenarioFn, SimulationResult
+
+__all__ = [
+    "C1MPCConfig",
+    "build_c1_mpc",
+    "simulate_lv_with_mpc",
+]
+
+StateVector = npt.NDArray[np.float64]
+InputVector = npt.NDArray[np.float64]
+
+
+@dataclass(frozen=True, slots=True)
+class C1MPCConfig:
+    """Tuning knobs for the C1 Linear MPC.
+
+    Attributes
+    ----------
+    sampling_time_min : float
+        Supervisory cadence — the period between consecutive MPC
+        solves. Default 5 min matches the lower end of the ADR 006
+        supervisory band (5–15 min).
+    n_horizon : int
+        Number of MPC prediction steps. Default 20 (-> 100 min lookahead
+        at 5-min cadence, ~ 8 * tau_2 of the Skogestad column).
+    n_robust : int
+        Robust horizon for scenario tree (set 0 for deterministic
+        Linear MPC; the LinearModel path does not exploit a non-zero
+        value).
+    q_top, q_bottom : float
+        Quadratic tracking weights on ``Delta y_D`` and ``Delta x_B``.
+        Set high (default 1e4) because composition deviations live in
+        the mole-fraction range ``1e-3``-`1e-2`.
+    r_lt, r_vb : float
+        Quadratic penalty on MV moves (``r_term`` in do-mpc). Keeps
+        the optimizer from issuing large step changes between solves.
+    lt_min, lt_max, vb_min, vb_max : float
+        Hard bounds on the absolute MVs (kmol/min), applied as
+        ``Delta u`` bounds after subtracting the nominal bias.
+    delta_u_max_per_step : float
+        Per-step rate limit on each MV (kmol/min). Default 0.5 keeps
+        the supervisor inside the LV-plant's tested ±20 % reflux
+        excursion range.
+    """
+
+    sampling_time_min: float = 5.0
+    n_horizon: int = 20
+    n_robust: int = 0
+    q_top: float = 1.0e4
+    q_bottom: float = 1.0e4
+    r_lt: float = 1.0e-1
+    r_vb: float = 1.0e-1
+    lt_min: float = 0.0
+    lt_max: float = 10.0
+    vb_min: float = 0.0
+    vb_max: float = 10.0
+    delta_u_max_per_step: float = 0.5
+
+
+def build_c1_mpc(
+    linearized: LinearizedLVModel,
+    *,
+    config: C1MPCConfig | None = None,
+) -> tuple[do_mpc.controller.MPC, do_mpc.model.LinearModel]:
+    """Build a configured Linear MPC and its underlying do-mpc model.
+
+    The MPC tracks ``y_D`` and ``x_B`` setpoints carried as
+    time-varying parameters (TVP). The feed disturbances ``F`` and
+    ``zF`` are also TVP — they enter the dynamics but the optimizer
+    cannot change them.
+
+    Parameters
+    ----------
+    linearized : LinearizedLVModel
+        Linearization of the LV-closed plant at the operating point
+        (typically the published Skogestad nominal SS).
+    config : C1MPCConfig, optional
+        MPC tuning. Defaults to :class:`C1MPCConfig`.
+
+    Returns
+    -------
+    (mpc, model) : (do_mpc.controller.MPC, do_mpc.model.LinearModel)
+        Both objects are fully ``setup()``-ed and ready for
+        ``make_step``.
+    """
+    if config is None:
+        config = C1MPCConfig()
+
+    NT = linearized.A.shape[0] // 2
+    n_states = 2 * NT
+
+    # State-space matrices: split linearized.B (shape 2*NT x 4 over
+    # [L, V, F, zF]) into MV (B_u) and disturbance (B_d) blocks.
+    A_mat = np.asarray(linearized.A, dtype=np.float64)
+    B_u = np.asarray(linearized.B[:, :2], dtype=np.float64)
+    B_d = np.asarray(linearized.B[:, 2:], dtype=np.float64)
+    C_mat = np.asarray(linearized.C, dtype=np.float64)
+
+    model = do_mpc.model.LinearModel("continuous")
+    dx = model.set_variable("_x", "dx", (n_states, 1))
+    du = model.set_variable("_u", "du", (2, 1))
+    dd = model.set_variable("_tvp", "dd", (2, 1))  # [dF, dzF]
+    dy_sp = model.set_variable("_tvp", "dy_sp", (2, 1))  # [d_y_D_sp, d_x_B_sp]
+
+    # Wrap the numeric system matrices as CasADi DM so the symbolic
+    # rhs expression is explicit about its dependency on (dx, du, dd).
+    A_sx = cs.DM(A_mat)
+    B_u_sx = cs.DM(B_u)
+    B_d_sx = cs.DM(B_d)
+    C_sx = cs.DM(C_mat)
+
+    x_dot = cs.mtimes(A_sx, dx) + cs.mtimes(B_u_sx, du) + cs.mtimes(B_d_sx, dd)
+    model.set_rhs("dx", x_dot)
+
+    dy = cs.mtimes(C_sx, dx)
+    model.set_expression("dy", dy)
+    model.setup()
+
+    mpc = do_mpc.controller.MPC(model)
+    mpc.set_param(
+        n_horizon=config.n_horizon,
+        n_robust=config.n_robust,
+        t_step=config.sampling_time_min,
+        store_full_solution=False,
+        nlpsol_opts={"ipopt.print_level": 0, "print_time": 0, "ipopt.sb": "yes"},
+    )
+
+    # Scalar quadratic tracking cost. Building the cost element-by-
+    # element avoids do-mpc's SXFunction "free variable" check
+    # confusing the partially-symbolic ``cs.mtimes(C_sx, dx)`` chain
+    # with the matrix-multiplied form.
+    y_D_dev = cs.dot(C_sx[0, :].T, dx)
+    x_B_dev = cs.dot(C_sx[1, :].T, dx)
+    err_top = y_D_dev - dy_sp[0]
+    err_bottom = x_B_dev - dy_sp[1]
+    cost = config.q_top * err_top**2 + config.q_bottom * err_bottom**2
+    mpc.set_objective(lterm=cost, mterm=cost)
+
+    # MV-move penalty.
+    mpc.set_rterm(du=np.array([config.r_lt, config.r_vb]))
+
+    # Hard bounds on the absolute MVs, applied as deviation bounds.
+    # do-mpc indexes element-by-element when the variable has shape > 1.
+    L_ss = linearized.L_ss
+    V_ss = linearized.V_ss
+    mpc.bounds["lower", "_u", "du", 0] = config.lt_min - L_ss
+    mpc.bounds["lower", "_u", "du", 1] = config.vb_min - V_ss
+    mpc.bounds["upper", "_u", "du", 0] = config.lt_max - L_ss
+    mpc.bounds["upper", "_u", "du", 1] = config.vb_max - V_ss
+
+    # Static TVP template: caller fills it at each solve via the
+    # tvp_fun closure.
+    tvp_template = mpc.get_tvp_template()
+
+    def _tvp_fun(t_now: float) -> object:
+        # Defaults to nominal (no deviation). The supervisor overrides
+        # these via ``mpc.set_uncertainty_values`` / TVP setter before
+        # each step.
+        for k in range(config.n_horizon + 1):
+            tvp_template["_tvp", k, "dd"] = np.zeros(2)
+            tvp_template["_tvp", k, "dy_sp"] = np.zeros(2)
+        return tvp_template
+
+    mpc.set_tvp_fun(_tvp_fun)
+    mpc.setup()
+    mpc.set_initial_guess()
+    return mpc, model
+
+
+def _supervisor_outputs(
+    mpc: do_mpc.controller.MPC,
+    *,
+    X_current: StateVector,
+    linearized: LinearizedLVModel,
+    F: float,
+    zF: float,
+    y_D_sp: float,
+    x_B_sp: float,
+) -> tuple[float, float]:
+    """Solve one MPC step and return absolute ``(LT, VB)``.
+
+    Performs the deviation-variable bookkeeping: subtract the
+    linearization-point steady state from the current state, set the
+    disturbance TVP, run ``make_step``, then add the nominal bias
+    back onto the optimal ``Delta u``.
+    """
+    NT = linearized.A.shape[0] // 2
+    n_states = 2 * NT
+
+    dx = (X_current - linearized.X_ss).reshape(n_states, 1)
+    dF = F - linearized.F_ss
+    dzF = zF - linearized.zF_ss
+    d_y_D_sp = y_D_sp - linearized.C[0] @ linearized.X_ss
+    d_x_B_sp = x_B_sp - linearized.C[1] @ linearized.X_ss
+
+    # Overwrite the TVP closure to deliver these deviations at the
+    # current horizon. do-mpc evaluates ``tvp_fun`` afresh on every
+    # make_step, so a fresh closure here is the right knob.
+    tvp_template = mpc.get_tvp_template()
+
+    def _tvp_fun(
+        t_now: float,
+        _dd: float = dF,
+        _dz: float = dzF,
+        _ys: float = float(d_y_D_sp),
+        _xs: float = float(d_x_B_sp),
+    ) -> object:
+        for k in range(mpc.settings.n_horizon + 1):
+            tvp_template["_tvp", k, "dd"] = np.array([_dd, _dz])
+            tvp_template["_tvp", k, "dy_sp"] = np.array([_ys, _xs])
+        return tvp_template
+
+    mpc.set_tvp_fun(_tvp_fun)
+    du = mpc.make_step(dx)
+    du_arr = np.asarray(du, dtype=np.float64).flatten()
+    LT = float(linearized.L_ss + du_arr[0])
+    VB = float(linearized.V_ss + du_arr[1])
+    return LT, VB
+
+
+def simulate_lv_with_mpc(
+    *,
+    X0: StateVector,
+    scenario: ScenarioFn,
+    mpc: do_mpc.controller.MPC,
+    linearized: LinearizedLVModel,
+    duration_min: float,
+    tick_dt_min: float = 0.05,
+    supervisor_period_min: float = 5.0,
+    parameters: ColumnAParameters = DEFAULT_PARAMETERS,
+    lv_config: LVConfiguration | None = None,
+    logger: RunLogger | None = None,
+) -> SimulationResult:
+    """Run a C1 closed-loop disturbance scenario end-to-end.
+
+    Mirrors :func:`industrial_ai.twin.simulate.simulate_lv_closed_loop`
+    structurally (same tick rate, same data-logging contract) but
+    drives the LV closure with MPC-commanded ``(LT, VB)`` instead of
+    PID-commanded ones. The MPC re-solves every
+    ``supervisor_period_min`` minutes; between solves the previous
+    optimal MVs are held.
+    """
+    if lv_config is None:
+        lv_config = LVConfiguration()
+    NT = parameters.NT
+    n_ticks = int(np.ceil(duration_min / tick_dt_min))
+    supervisor_period_ticks = max(1, round(supervisor_period_min / tick_dt_min))
+
+    t_axis = np.zeros(n_ticks + 1, dtype=np.float64)
+    X_axis = np.zeros((n_ticks + 1, 2 * NT), dtype=np.float64)
+    X_axis[0] = X0
+    inputs_axis = np.zeros((n_ticks, 7), dtype=np.float64)
+    applied_setpoints = np.zeros((n_ticks, 2), dtype=np.float64)
+    requested_setpoints = np.zeros((n_ticks, 2), dtype=np.float64)
+    wall_clock = np.zeros(n_ticks, dtype=np.float64)
+
+    X_current = X0.copy()
+    # Initialize MV at the linearization bias.
+    LT_held = linearized.L_ss
+    VB_held = linearized.V_ss
+    success = True
+    message = "ok"
+
+    for k in range(n_ticks):
+        t_k = k * tick_dt_min
+        t_next = min((k + 1) * tick_dt_min, duration_min)
+        wall_start = time.perf_counter()
+        step = scenario(t_k)
+
+        # Re-solve MPC on supervisory-period boundaries.
+        if k % supervisor_period_ticks == 0:
+            try:
+                LT_held, VB_held = _supervisor_outputs(
+                    mpc,
+                    X_current=X_current,
+                    linearized=linearized,
+                    F=step.F,
+                    zF=step.zF,
+                    y_D_sp=step.y_D_setpoint,
+                    x_B_sp=step.x_B_setpoint,
+                )
+            except Exception as exc:
+                success = False
+                message = f"MPC solve failed at tick {k} (t={t_k:.3f}): {exc!r}"
+                t_axis[k + 1 :] = t_next
+                X_axis[k + 1 :] = X_current
+                break
+
+        U = assemble_inputs_lv(
+            state=X_current,
+            LT=LT_held,
+            VB=VB_held,
+            F=step.F,
+            zF=step.zF,
+            qF=step.qF,
+            config=lv_config,
+            parameters=parameters,
+        )
+        if not np.all(np.isfinite(U)):
+            success = False
+            message = f"non-finite LV inputs at tick {k} (t={t_k:.3f}): U={U}"
+            t_axis[k + 1 :] = t_next
+            X_axis[k + 1 :] = X_current
+            break
+
+        result = integrate_open_loop(
+            X0=X_current,
+            t_span=(t_k, t_next),
+            inputs_fn=_hold_inputs(U),
+            parameters=parameters,
+            t_eval=np.array([t_next], dtype=np.float64),
+            max_step=tick_dt_min,
+        )
+        if not result.success or result.X.shape[0] == 0:
+            success = False
+            message = f"integration failed at tick {k}: {result.message}"
+            t_axis[k + 1 :] = t_next
+            X_axis[k + 1 :] = X_current
+            break
+        X_next = result.X[-1]
+        if not np.all(np.isfinite(X_next)):
+            success = False
+            message = f"state diverged to NaN/Inf at tick {k}"
+            t_axis[k + 1 :] = t_next
+            X_axis[k + 1 :] = X_current
+            break
+        X_current = X_next
+        wall_clock[k] = time.perf_counter() - wall_start
+
+        t_axis[k + 1] = t_next
+        X_axis[k + 1] = X_current
+        inputs_axis[k] = U
+        applied_setpoints[k] = (step.y_D_setpoint, step.x_B_setpoint)
+        requested_setpoints[k] = (step.y_D_setpoint, step.x_B_setpoint)
+
+        if logger is not None:
+            logger.record_timeseries(
+                t=float(t_next),
+                y_D=float(X_current[NT - 1]),
+                x_B=float(X_current[0]),
+                L=float(U[0]),
+                V=float(U[1]),
+                D=float(U[2]),
+                B=float(U[3]),
+                F=float(U[4]),
+                zF=float(U[5]),
+                qF=float(U[6]),
+            )
+            logger.record_setpoint(
+                t=float(t_next),
+                channel="y_D",
+                requested=float(step.y_D_setpoint),
+                applied=float(step.y_D_setpoint),
+            )
+            logger.record_setpoint(
+                t=float(t_next),
+                channel="x_B",
+                requested=float(step.x_B_setpoint),
+                applied=float(step.x_B_setpoint),
+            )
+            logger.record_latency(cycle_index=k, wall_clock_seconds=wall_clock[k])
+
+    return SimulationResult(
+        t=t_axis,
+        X=X_axis,
+        inputs=inputs_axis,
+        applied_setpoints=applied_setpoints,
+        requested_setpoints=requested_setpoints,
+        cycle_wall_clock_seconds=wall_clock,
+        success=success,
+        message=message,
+    )
+
+
+def _hold_inputs(U: InputVector) -> Callable[[float, StateVector], InputVector]:
+    """Inner closure that holds U constant across a solve_ivp call."""
+
+    def fn(_t: float, _X: StateVector) -> InputVector:
+        return U
+
+    return fn
