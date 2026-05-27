@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "generated_at_utc": "2026-05-27T14:37:09.442134+00:00",
+  "schema_version": 2,
+  "generated_at_utc": "2026-05-27T16:05:47.222824+00:00",
   "operating_point": {
     "case": "Skogestad Column A, nominal SS",
     "F_kmol_per_min": 1.0,
@@ -8,6 +8,19 @@
     "qF": 1.0,
     "L0_kmol_per_min": 2.70629,
     "V0_kmol_per_min": 3.20629
+  },
+  "shootout_validation": {
+    "validated_at_utc": "2026-05-27T16:05:47.222846+00:00",
+    "shootout_file": "c0_pid_tuning_shootout.json",
+    "winner": "TL_no_decoupler",
+    "alternatives_tested": [
+      "SIMC_1DoF_no_decoupler",
+      "SIMC_2DoF_no_decoupler",
+      "TL_with_decoupler_retuned",
+      "SIMC_1DoF_with_decoupler",
+      "SIMC_2DoF_with_decoupler"
+    ],
+    "margin_over_best_alternative_pct": 28.98936146683232
   },
   "winner": {
     "variant_name": "TL_no_decoupler",

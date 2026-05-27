@@ -380,12 +380,26 @@ def simulate_lv_closed_loop(
             parameters=parameters,
         )
 
+        # Pre-integration sanity check: if the LV closure already
+        # produced non-finite MVs (level loops driven to infinity by an
+        # accumulating PID integral, etc.) skip the integrator — it
+        # would otherwise spend unbounded time on tiny steps trying to
+        # recover from NaN. Reports the run as failed with a clear
+        # message so robustness analysis can see *why*.
+        if not np.all(np.isfinite(U)):
+            success = False
+            message = f"non-finite LV inputs at tick {k} (t={t_k:.3f}): U={U}"
+            t_axis[k + 1 :] = t_next
+            X_axis[k + 1 :] = X_current
+            break
+
         result = integrate_open_loop(
             X0=X_current,
             t_span=(t_k, t_next),
             inputs_fn=_zero_order_hold_inputs(U),
             parameters=parameters,
             t_eval=np.array([t_next], dtype=np.float64),
+            max_step=tick_dt_min,
         )
         if not result.success or result.X.shape[0] == 0:
             success = False

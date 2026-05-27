@@ -52,6 +52,10 @@ data/cache/
 *.parquet
 *.h5
 *.pkl
+# Whitelist sweep-cache state files used by lookup_lv_ss for off-nominal
+# robustness checks and Phase-3 MPC linearizations — these are versioned
+# reference artifacts, not run outputs.
+!data/reference/*.parquet
 
 # Outputs / artifacts
 runs/

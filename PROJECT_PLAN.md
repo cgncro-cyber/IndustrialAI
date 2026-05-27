@@ -188,6 +188,7 @@ These are non-negotiable, because LLM outputs are stochastic and a single-run co
 - **Practical significance threshold.** Effect-size thresholds are defined *before* running the final experiments — e.g., >5 % energy reduction or >10 % settling-time improvement counts as practically significant; anything below is reported as null. This prevents the "statistically significant but industrially trivial" trap.
 - **Effect-size reporting.** Cohen's d (or equivalent) reported alongside p-values for all primary comparisons. Means alone are insufficient.
 - **C0 and C1 baselines may use a single run.** They are deterministic — re-running adds no information. Only the stochastic supervisory layers (C2, C3) need replicates.
+- **Off-nominal starting states come from the sweep cache, not runtime Newton-Krylov.** Every disturbance scenario evaluated at a non-nominal operating point loads its starting state ``X0`` from ``data/reference/operating_window_states.parquet`` (1125 LV-closed steady states, 100 % converged offline via ``tools/run_operating_window_sweep.py``). Re-solving the LV-closed SS at runtime on the high-RGA Column A plant is numerically ill-conditioned and produced a NaN failure during the Phase-2 robustness spot-check (May 2026); the sweep-lookup pattern resolves this and gives the Phase-3 MPC the same X0 source for off-nominal linearizations. See :func:`industrial_ai.twin.column_a.operating_window.lookup_lv_ss`.
 
 **Deliverables**
 - `src/industrial_ai/evaluation/` — KPI computation, bootstrap CI machinery, statistical tests, plot generation.
@@ -204,7 +205,40 @@ These are non-negotiable, because LLM outputs are stochastic and a single-run co
 - LinkedIn post + CV update with arXiv link.
 
 **Explicitly deferred (post-job-search, optional)**
-- Journal version with additional ablation studies for *Computers & Chemical Engineering* or *Journal of Process Control*.
+- Journal version with additional ablation studies for *Computers & Chemical Engineering* or *Journal of Process Control*. The Phase 6 industrial-validation output, if pursued, is the natural backbone of this journal version.
+
+---
+
+## Phase 6 — Industrial Validation via Anonymized Real-Plant Data (deferred)
+
+**Status:** Conditional. Not started until Phase 5 closes (arXiv preprint live with stable identifier, SAFEPROCESS submission completed). Governed by [ADR 008](./docs/decisions/008-deferred-real-data-validation.md).
+
+**Effort:** 3–4 weeks if pursued.
+
+**Goal:** Validate the safety-gated agentic supervisory architecture on anonymized historized data from a real industrial column, qualitatively elevating the contribution from *"methodology on a public benchmark"* to *"methodology with industrial validation"*. This is upside, not load-bearing — the Phase 5 deliverable stands as a primary credential independently of whether Phase 6 is executed.
+
+**Sourcing strategy.** Local-operational (plant manager / Werksleiter direct), not corporate R&D. Symmetric barter: fully anonymized historized data of one column over ≥4 weeks, in exchange for an Advisory-Mode controller trial on the same plant. No co-authorship, no NDA, written email-trail of informed consent. Closed-loop deployment explicitly out of scope for the Gegenleistung. See ADR 008 for the full contract, anonymization standard, and current-employer special case.
+
+**Deliverables**
+- `src/industrial_ai/phase6/` — data-ingestion and sanitization pipeline that enforces the ADR 008 anonymization standard as a hard precondition for data entering version control.
+- Re-tuned regulatory PID layer and re-identified linear model from the real-plant operating point, reusing the Phase 1–2 tooling unchanged.
+- Same C0/C1/C2/C3 four-way comparison on the real-data context. Agent and safety gate carried over from Phase 1–5 unchanged.
+- `notebooks/06_industrial_validation.ipynb` — single-column walkthrough, anonymized throughout, with no "specialty chemicals" or "silicones" framing per ADR 008.
+- `phase6/assumptions.md` — documents the anonymized real-plant context with the same rigor as `column_a/assumptions.md`.
+- Manuscript output: either an arXiv v2 expansion of the Phase 5 preprint or a separate journal-version manuscript. Decision deferred to Phase 6 kickoff.
+- Documented email-trail of consent with the data provider, committed to a private location outside version control.
+
+**Gate**
+- All anonymization steps verifiable through automated tests before any data is committed.
+- Data provider has reviewed the manuscript pre-submission (courtesy safeguard, not approval gate).
+- No identifying language anywhere in code, manuscript, or supplementary material — verified by an explicit checklist drawn from ADR 008.
+- Advisory-Mode trial scope agreed in writing with the data provider, with closed-loop deployment explicitly excluded.
+- If the data provider is the author's current employer at execution time, employment-contract clauses on moonlighting, IP assignment, and external publication have been checked and documented before consent is sought.
+
+**Fallback options if Phase 6 cannot be sourced within Q1 2027**
+- Public process-control datasets (Tennessee Eastman Process — already in the safety-gate training pipeline — Eastman Pittsburgh Challenge, NoBOOM). Lower glamour, publication-safe.
+- Academic-partner sourcing via a chemical-engineering chair (TU Dortmund DYNAMICS, RWTH Aachen AVT, TU München) holding anonymized industrial datasets cleared for academic use. Adds a co-authorship dimension; moves the IP locus from a current-employer route to academia.
+- Skip Phase 6 entirely. The Phase 5 credential is sufficient on its own.
 
 ---
 
@@ -227,6 +261,7 @@ Decision rationale: see `docs/decisions/004-publication-strategy.md`.
 - Publication path: **arXiv preprint as primary, SAFEPROCESS as secondary, journal deferred** — see `docs/decisions/004-publication-strategy.md`.
 - Local LLM: **Llama-3.3-Nemotron-Super-49B v1.5** primary, **Qwen3.6-27B** ablation, on LM Studio — see `docs/decisions/005-local-model-selection.md`.
 - **Two-layer hierarchical control architecture** with four-way comparison C0/C1/C2/C3 — see `docs/decisions/006-hierarchical-control-architecture.md`.
+- **Real-data industrial validation is deferred to a conditional Phase 6**, executed only after the Phase 5 arXiv preprint is public, under a strict anonymization-and-barter contract (no co-authorship, Advisory-Mode-only Gegenleistung, local-operational sourcing) — see `docs/decisions/008-deferred-real-data-validation.md`.
 
 ## Open Decisions
 

@@ -112,6 +112,57 @@ def test_relay_mv_alternates_around_bias(
     )
 
 
+def test_relay_with_decoupler_shifts_ultimate_period(
+    skogestad_reference_state: npt.NDArray[np.float64],
+) -> None:
+    """A non-identity decoupler must visibly change the limit-cycle period.
+
+    Smoke check that the ``mv_decoupler`` kwarg is wired into the
+    relay loop. The exact Pu shift depends on the plant; for Column A
+    LV's simplified decoupler the top-loop Pu grows by ~10x and the
+    bottom-loop Pu shrinks slightly — both shifts are well outside
+    relay-test repeatability noise.
+    """
+    from industrial_ai.control.decoupler import simplified_decoupler
+    from industrial_ai.twin.column_a import DEFAULT_PARAMETERS
+    from industrial_ai.twin.column_a.linearize import linearize_lv
+
+    lin = linearize_lv(
+        X_ss=skogestad_reference_state,
+        L_ss=DEFAULT_PARAMETERS.nominal_reflux_L0_kmol_per_min,
+        V_ss=DEFAULT_PARAMETERS.nominal_boilup_V0_kmol_per_min,
+        F_ss=DEFAULT_PARAMETERS.nominal_feed_F_kmol_per_min,
+        zF_ss=0.5,
+        backend="casadi",
+    )
+    D = simplified_decoupler(lin).matrix
+
+    r_no = relay_test(
+        loop="top",
+        X0=skogestad_reference_state,
+        setpoint=_y_D(skogestad_reference_state),
+        relay_amplitude_d=0.5,
+        hysteresis=5e-3,
+        duration_min=400.0,
+    )
+    r_dec = relay_test(
+        loop="top",
+        X0=skogestad_reference_state,
+        setpoint=_y_D(skogestad_reference_state),
+        relay_amplitude_d=0.5,
+        hysteresis=5e-3,
+        duration_min=400.0,
+        mv_decoupler=D,
+    )
+    # The decoupled effective gain is ~36x smaller, the ultimate
+    # frequency drops correspondingly — Pu grows by an order of
+    # magnitude. The exact value at this configuration is ~107 min
+    # (vs ~10.9 min undecoupled); allow a generous band.
+    assert r_dec.Pu > 5.0 * r_no.Pu, (
+        f"decoupler should slow the limit cycle; got Pu(no)={r_no.Pu:.2f}, Pu(dec)={r_dec.Pu:.2f}"
+    )
+
+
 def test_relay_raises_on_too_short_duration(
     skogestad_reference_state: npt.NDArray[np.float64],
 ) -> None:

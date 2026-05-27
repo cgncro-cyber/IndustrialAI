@@ -1,15 +1,101 @@
 {
-  "schema_version": 1,
-  "generated_at_utc": "2026-05-27T14:37:09.439541+00:00",
+  "schema_version": 2,
+  "generated_at_utc": "2026-05-27T16:05:47.142351+00:00",
+  "git_sha": "2741752402b91cd57b621afbcdc334740cea3cd5",
+  "operating_point": {
+    "case": "Skogestad Column A, nominal SS",
+    "F_kmol_per_min": 1.0,
+    "zF": 0.5,
+    "qF": 1.0,
+    "L0_kmol_per_min": 2.70629,
+    "V0_kmol_per_min": 3.20629,
+    "y_D_at_SS": 0.9899999596076223,
+    "x_B_at_SS": 0.010000040392367918,
+    "rga_11": 35.94187030779878
+  },
   "scenarios": [
-    "F_step_+20pct",
-    "F_step_-20pct",
-    "zF_step_+10pct",
-    "zF_step_-10pct",
-    "yD_setpoint_+0p5pct"
+    {
+      "name": "F_step_+20pct",
+      "field": "F",
+      "pre_step_value": 1.0,
+      "post_step_value": 1.2,
+      "onset_min": 5.0,
+      "horizon_min": 60.0
+    },
+    {
+      "name": "F_step_-20pct",
+      "field": "F",
+      "pre_step_value": 1.0,
+      "post_step_value": 0.8,
+      "onset_min": 5.0,
+      "horizon_min": 60.0
+    },
+    {
+      "name": "zF_step_+10pct",
+      "field": "zF",
+      "pre_step_value": 0.5,
+      "post_step_value": 0.55,
+      "onset_min": 5.0,
+      "horizon_min": 60.0
+    },
+    {
+      "name": "zF_step_-10pct",
+      "field": "zF",
+      "pre_step_value": 0.5,
+      "post_step_value": 0.45,
+      "onset_min": 5.0,
+      "horizon_min": 60.0
+    },
+    {
+      "name": "yD_setpoint_+0p5pct",
+      "field": "y_D_setpoint",
+      "pre_step_value": 0.99,
+      "post_step_value": 0.995,
+      "onset_min": 5.0,
+      "horizon_min": 60.0
+    }
   ],
   "winner_name": "TL_no_decoupler",
   "winner_aggregate_iae": 0.8362269141725175,
+  "winner_margin_over_runner_up_pct": 28.98936146683232,
+  "tuning_provenance": {
+    "relay_undecoupled_top": {
+      "label": "top, undecoupled",
+      "loop": "top",
+      "Ku": 122.67270313967502,
+      "Pu_min": 10.906983756703616,
+      "relay_amplitude_d_kmol_per_min": 0.5,
+      "measurement_amplitude_a": 0.005189579719644122,
+      "setpoint": 0.9899999596076223
+    },
+    "relay_undecoupled_bottom": {
+      "label": "bottom, undecoupled",
+      "loop": "bottom",
+      "Ku": 121.42542606104753,
+      "Pu_min": 5.387681342475446,
+      "relay_amplitude_d_kmol_per_min": 0.5,
+      "measurement_amplitude_a": 0.005242886873195044,
+      "setpoint": 0.010000040392367918
+    },
+    "relay_decoupled_top": {
+      "label": "top, decoupled",
+      "loop": "top",
+      "Ku": 126.39602002351322,
+      "Pu_min": 107.33024198977529,
+      "relay_amplitude_d_kmol_per_min": 0.5,
+      "measurement_amplitude_a": 0.005036707423613118,
+      "setpoint": 0.9899999596076223
+    },
+    "relay_decoupled_bottom": {
+      "label": "bottom, decoupled",
+      "loop": "bottom",
+      "Ku": 116.82010574135886,
+      "Pu_min": 3.600163502641218,
+      "relay_amplitude_d_kmol_per_min": 0.5,
+      "measurement_amplitude_a": 0.005449573669938848,
+      "setpoint": 0.010000040392367918
+    }
+  },
   "candidates": [
     {
       "name": "TL_no_decoupler",
@@ -246,12 +332,12 @@
       }
     },
     {
-      "name": "TL_with_decoupler",
+      "name": "TL_with_decoupler_retuned",
       "tuning_method": "Tyreus-Luyben",
-      "Kp_top": 38.33521973114844,
-      "Ti_top_min": 23.995364264747955,
-      "Kp_bottom": 37.94544564407735,
-      "Ti_bottom_min": 11.852898953445981,
+      "Kp_top": 39.49875625734788,
+      "Ti_top_min": 236.12653237750564,
+      "Kp_bottom": 36.506283044174644,
+      "Ti_bottom_min": 7.9203597058106805,
       "decoupler": {
         "matrix": [
           [
@@ -270,56 +356,56 @@
         ]
       },
       "setpoint_filter_tau_min": null,
-      "reference": "Tyreus-Luyben gains + simplified static decoupler (Skogestad & Postlethwaite 1996 \u00a710.8)",
+      "reference": "Tyreus-Luyben gains derived from a relay test run *with* the simplified decoupler in the loop, so the (Ku, Pu) describe the effective plant G(0) D rather than G(0). Replaces the naive TL-on-decoupled-plant variant. Skogestad & Postlethwaite 1996 \u00a710.8.",
       "results": {
         "per_scenario": {
           "F_step_+20pct": {
             "success": true,
-            "specific_energy_kmol_per_kmol": 7.5216483555673594,
-            "light_yield": 0.8686240622989624,
+            "specific_energy_kmol_per_kmol": 7.700590105139029,
+            "light_yield": 0.8673467629141076,
             "constraint_violations": 1201,
-            "settling_time_min": 46.45,
-            "mv_activity_kmol_per_min": 2.701298652859751,
-            "iae_mole_fraction_min": 0.7117269608934773
+            "settling_time_min": 46.550000000000004,
+            "mv_activity_kmol_per_min": 3.126042156241711,
+            "iae_mole_fraction_min": 0.5910802793797683
           },
           "F_step_-20pct": {
             "success": true,
-            "specific_energy_kmol_per_kmol": 6.617278408189771,
-            "light_yield": 1.1502123258557941,
+            "specific_energy_kmol_per_kmol": 6.007116558004906,
+            "light_yield": 1.1486798583224136,
             "constraint_violations": 1182,
             "settling_time_min": Infinity,
-            "mv_activity_kmol_per_min": 3.2470158282671275,
-            "iae_mole_fraction_min": 1.1128182056509761
+            "mv_activity_kmol_per_min": 1.4480518593152034,
+            "iae_mole_fraction_min": 1.1516860396057613
           },
           "zF_step_+10pct": {
             "success": true,
-            "specific_energy_kmol_per_kmol": 6.613584403691478,
-            "light_yield": 0.9227373967683872,
+            "specific_energy_kmol_per_kmol": 6.715883672913888,
+            "light_yield": 0.9211508293697978,
             "constraint_violations": 1201,
-            "settling_time_min": 46.400000000000006,
-            "mv_activity_kmol_per_min": 0.7726985783534359,
-            "iae_mole_fraction_min": 0.36730019419016924
+            "settling_time_min": 47.150000000000006,
+            "mv_activity_kmol_per_min": 1.035639558029008,
+            "iae_mole_fraction_min": 0.3176316906539951
           },
           "zF_step_-10pct": {
             "success": true,
-            "specific_energy_kmol_per_kmol": 6.532408313325346,
-            "light_yield": 1.0657100571798608,
+            "specific_energy_kmol_per_kmol": 6.348317928492646,
+            "light_yield": 1.0668972406191881,
             "constraint_violations": 1201,
             "settling_time_min": Infinity,
-            "mv_activity_kmol_per_min": 0.3532453754320666,
-            "iae_mole_fraction_min": 0.49270149033712934
+            "mv_activity_kmol_per_min": 0.3362349031741263,
+            "iae_mole_fraction_min": 0.48828646584533897
           },
           "yD_setpoint_+0p5pct": {
             "success": true,
-            "specific_energy_kmol_per_kmol": 6.735521398231264,
-            "light_yield": 0.9788776141209994,
-            "constraint_violations": 101,
-            "settling_time_min": 39.1,
-            "mv_activity_kmol_per_min": 0.5794225446621213,
-            "iae_mole_fraction_min": 0.27604014144262895
+            "specific_energy_kmol_per_kmol": 6.57565354785974,
+            "light_yield": 0.9832259007911152,
+            "constraint_violations": 311,
+            "settling_time_min": 26.6,
+            "mv_activity_kmol_per_min": 0.6801489167360595,
+            "iae_mole_fraction_min": 0.2577943879083117
           }
         },
-        "aggregate_iae": 2.9605869925143806,
+        "aggregate_iae": 2.8064788633931754,
         "any_failure": false
       }
     },
@@ -485,52 +571,52 @@
       "F_kmol_per_min": 1.0,
       "zF": 0.5,
       "skipped": false,
-      "aggregate_iae": 0.8362269141725175,
+      "aggregate_iae": 0.8362269191286074,
       "per_scenario": {
         "F_step_+20pct": {
           "success": true,
-          "specific_energy_kmol_per_kmol": 6.040369460253845,
-          "light_yield": 0.9759660049142133,
+          "specific_energy_kmol_per_kmol": 6.04036953619993,
+          "light_yield": 0.9759659921499487,
           "constraint_violations": 1201,
           "settling_time_min": 45.150000000000006,
-          "mv_activity_kmol_per_min": 0.9191249655214144,
-          "iae_mole_fraction_min": 0.33115427978893275
+          "mv_activity_kmol_per_min": 0.9191250135223283,
+          "iae_mole_fraction_min": 0.3311542818387487
         },
         "F_step_-20pct": {
           "success": true,
-          "specific_energy_kmol_per_kmol": 7.0241411078998235,
-          "light_yield": 1.006060584476521,
+          "specific_energy_kmol_per_kmol": 7.0241412334062385,
+          "light_yield": 1.0060605659628887,
           "constraint_violations": 117,
           "settling_time_min": 40.550000000000004,
-          "mv_activity_kmol_per_min": 0.8786825947362322,
-          "iae_mole_fraction_min": 0.3037787718521129
+          "mv_activity_kmol_per_min": 0.8786826516358195,
+          "iae_mole_fraction_min": 0.3037787696500419
         },
         "zF_step_+10pct": {
           "success": true,
-          "specific_energy_kmol_per_kmol": 5.996796217591855,
-          "light_yield": 0.9798450211673937,
+          "specific_energy_kmol_per_kmol": 5.996796299750968,
+          "light_yield": 0.9798450073299548,
           "constraint_violations": 1201,
           "settling_time_min": 0.0,
-          "mv_activity_kmol_per_min": 0.05684392150310247,
-          "iae_mole_fraction_min": 0.018017112466724848
+          "mv_activity_kmol_per_min": 0.05684399242085503,
+          "iae_mole_fraction_min": 0.018017121020147124
         },
         "zF_step_-10pct": {
           "success": true,
-          "specific_energy_kmol_per_kmol": 6.897051534984602,
-          "light_yield": 1.002452943917119,
+          "specific_energy_kmol_per_kmol": 6.897051645376262,
+          "light_yield": 1.0024529272810152,
           "constraint_violations": 940,
           "settling_time_min": 0.0,
-          "mv_activity_kmol_per_min": 0.06171319811630438,
-          "iae_mole_fraction_min": 0.017931280693967704
+          "mv_activity_kmol_per_min": 0.06171323903075354,
+          "iae_mole_fraction_min": 0.017931273812135835
         },
         "yD_setpoint_+0p5pct": {
           "success": true,
-          "specific_energy_kmol_per_kmol": 6.904007186615723,
-          "light_yield": 0.9632000330909116,
+          "specific_energy_kmol_per_kmol": 6.904007295000998,
+          "light_yield": 0.9632000178635143,
           "constraint_violations": 1201,
           "settling_time_min": 28.450000000000003,
-          "mv_activity_kmol_per_min": 0.5443304334927976,
-          "iae_mole_fraction_min": 0.16534546937077932
+          "mv_activity_kmol_per_min": 0.544330498243458,
+          "iae_mole_fraction_min": 0.1653454728075339
         }
       }
     },
@@ -538,13 +624,13 @@
       "F_kmol_per_min": 0.8,
       "zF": 0.5,
       "skipped": true,
-      "reason": "Newton-Krylov of LV-closed residual + integration fallback both produce NaN at F=0.8 on the high-RGA LV plant. Deferred to Phase 5."
+      "reason": "Fixed-gain TL controller tuned at nominal SS saturates at F=0.80 (y_D and x_B operating points are far from the design setpoints, PID integral winds up, simulator diverges). The structural answer is Phase-3 Linear MPC, which re-linearizes per OP using the sweep cache."
     },
     "F+20pct": {
       "F_kmol_per_min": 1.2,
       "zF": 0.5,
       "skipped": true,
-      "reason": "Same numerical conditioning issue as F-20pct. Deferred to Phase 5."
+      "reason": "Fixed-gain TL controller tuned at nominal SS saturates at F=1.20 (y_D and x_B operating points are far from the design setpoints, PID integral winds up, simulator diverges). The structural answer is Phase-3 Linear MPC, which re-linearizes per OP using the sweep cache."
     }
   }
 }

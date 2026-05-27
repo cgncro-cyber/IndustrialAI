@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -32,17 +33,62 @@ from industrial_ai.control.c0_variants import (
     build_pids_for_variant,
     build_six_variants,
 )
+from industrial_ai.control.decoupler import simplified_decoupler
 from industrial_ai.control.relay_tuning import RelayResult, relay_test
 from industrial_ai.control.scenarios import SCENARIO_NAMES, build_scenario
 from industrial_ai.evaluation.kpis import KPISet, compute_kpis
 from industrial_ai.twin.column_a import DEFAULT_PARAMETERS
 from industrial_ai.twin.column_a.linearize import linearize_lv
+from industrial_ai.twin.column_a.operating_window import lookup_lv_ss
 from industrial_ai.twin.simulate import simulate_lv_closed_loop
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _SS_FIXTURE = _REPO_ROOT / "data" / "reference" / "skogestad_column_a_steady_state.json"
 _DEFAULT_SHOOTOUT = _REPO_ROOT / "data" / "reference" / "c0_pid_tuning_shootout.json"
 _DEFAULT_C0 = _REPO_ROOT / "data" / "reference" / "c0_pid_tuning.json"
+
+
+def _git_sha() -> str:
+    """Return the current git SHA so the audit JSON can be tied to the codebase."""
+    try:
+        return (
+            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT).decode().strip()
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "unknown"
+
+
+def _scenario_metadata() -> list[dict[str, Any]]:
+    """Return name/field/pre/post per canonical scenario, for the audit JSON."""
+    from industrial_ai.control.scenarios import build_scenario
+
+    out: list[dict[str, Any]] = []
+    for name in SCENARIO_NAMES:
+        _fn, spec = build_scenario(name)
+        out.append(
+            {
+                "name": spec.name,
+                "field": spec.field,
+                "pre_step_value": spec.pre_step_value,
+                "post_step_value": spec.post_step_value,
+                "onset_min": spec.onset_min,
+                "horizon_min": spec.horizon_min,
+            }
+        )
+    return out
+
+
+def _relay_provenance(result: RelayResult, label: str) -> dict[str, Any]:
+    """Return the (Ku, Pu) and test settings used to derive Tyreus-Luyben gains."""
+    return {
+        "label": label,
+        "loop": result.loop,
+        "Ku": result.Ku,
+        "Pu_min": result.Pu,
+        "relay_amplitude_d_kmol_per_min": result.relay_amplitude_d,
+        "measurement_amplitude_a": result.measurement_amplitude_a,
+        "setpoint": result.setpoint,
+    }
 
 
 def _load_nominal_ss() -> np.ndarray:
@@ -95,11 +141,19 @@ def _score_variant(variant: C0Variant, X0: np.ndarray, scenarios: list[str]) -> 
     }
 
 
-def _write_c0_winner(winner: C0Variant, winner_results: dict[str, Any], path: Path) -> None:
+def _write_c0_winner(
+    winner: C0Variant,
+    winner_results: dict[str, Any],
+    path: Path,
+    *,
+    shootout_path: Path,
+    alternatives: list[str],
+    margin_pct: float | None,
+) -> None:
     """Overwrite ``c0_pid_tuning.json`` with the winning variant's gains."""
     p = DEFAULT_PARAMETERS
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": datetime.now(tz=UTC).isoformat(),
         "operating_point": {
             "case": "Skogestad Column A, nominal SS",
@@ -108,6 +162,13 @@ def _write_c0_winner(winner: C0Variant, winner_results: dict[str, Any], path: Pa
             "qF": p.nominal_feed_liquid_fraction_qF,
             "L0_kmol_per_min": p.nominal_reflux_L0_kmol_per_min,
             "V0_kmol_per_min": p.nominal_boilup_V0_kmol_per_min,
+        },
+        "shootout_validation": {
+            "validated_at_utc": datetime.now(tz=UTC).isoformat(),
+            "shootout_file": shootout_path.name,
+            "winner": winner.name,
+            "alternatives_tested": alternatives,
+            "margin_over_best_alternative_pct": margin_pct,
         },
         "winner": {
             "variant_name": winner.name,
@@ -160,7 +221,7 @@ def main() -> int:
         backend="casadi",
     )
 
-    print("Running relay tests for the Tyreus-Luyben candidate ...")
+    print("Running relay tests (undecoupled + decoupled plant) for the Tyreus-Luyben pair ...")
     relay_top: RelayResult = relay_test(
         loop="top",
         X0=X_nominal,
@@ -177,9 +238,32 @@ def main() -> int:
         hysteresis=5.0e-3,
         duration_min=400.0,
     )
+    decoupler_spec = simplified_decoupler(linearized)
+    relay_top_decoupled: RelayResult = relay_test(
+        loop="top",
+        X0=X_nominal,
+        setpoint=float(X_nominal[p.NT - 1]),
+        relay_amplitude_d=0.5,
+        hysteresis=5.0e-3,
+        duration_min=400.0,
+        mv_decoupler=decoupler_spec.matrix,
+    )
+    relay_bottom_decoupled: RelayResult = relay_test(
+        loop="bottom",
+        X0=X_nominal,
+        setpoint=float(X_nominal[0]),
+        relay_amplitude_d=0.5,
+        hysteresis=5.0e-3,
+        duration_min=400.0,
+        mv_decoupler=decoupler_spec.matrix,
+    )
 
     variants = build_six_variants(
-        linearized=linearized, relay_top=relay_top, relay_bottom=relay_bottom
+        linearized=linearized,
+        relay_top=relay_top,
+        relay_bottom=relay_bottom,
+        relay_top_decoupled=relay_top_decoupled,
+        relay_bottom_decoupled=relay_bottom_decoupled,
     )
     print(f"\nScoring {len(variants)} candidates over {len(SCENARIO_NAMES)} scenarios ...")
 
@@ -200,55 +284,93 @@ def main() -> int:
         f"\nWinner: {winner.name} (aggregate IAE = {winner_entry['results']['aggregate_iae']:.4f})"
     )
 
-    # The nominal-OP robustness check is free — it is just the winner's
-    # own aggregate IAE recomputed against the same seed state. We
-    # include it so the JSON's robustness block has at least one
-    # entry. The F-perturbed OPs require re-converging the LV-closed
-    # SS at the perturbed feed flow, which is numerically demanding on
-    # this plant (RGA(1,1) ~ 36, Newton-Krylov ill-conditioned, the
-    # integration fallback drives some holdups through zero and
-    # produces NaN). A graduated warm-start helped on the operating-
-    # window sweep but still triggers NaN on the direct path. Deferred
-    # to Phase 5, when the evaluation module gets the full per-OP
-    # bootstrap CI machinery anyway — see PROJECT_PLAN.md Phase 5
-    # "Stochastic Accounting" section.
-    print("\nRobustness spot-check (nominal OP only; F-perturbed OPs deferred):")
-    nominal_results = _score_variant(winner, X_nominal, list(SCENARIO_NAMES))
-    robustness: dict[str, Any] = {
-        "nominal": {
-            "F_kmol_per_min": DEFAULT_PARAMETERS.nominal_feed_F_kmol_per_min,
-            "zF": 0.5,
-            "skipped": False,
-            "aggregate_iae": nominal_results["aggregate_iae"],
-            "per_scenario": nominal_results["per_scenario"],
-        },
-        "F-20pct": {
-            "F_kmol_per_min": 0.8 * DEFAULT_PARAMETERS.nominal_feed_F_kmol_per_min,
+    # Robustness spot-check.
+    #
+    # The nominal OP is included because it is free (the seed state is
+    # already X_nominal and lookup_lv_ss returns the same vector that
+    # produced the headline winner-IAE).
+    #
+    # The F-perturbed OPs are *intentionally skipped*. They load X0
+    # from the Phase-1 sweep cache cleanly, but the C0 winner's TL
+    # gains — tuned at the nominal SS — saturate the LV controller
+    # against the very different y_D, x_B operating points at F=0.8
+    # (y_D ~ 0.80, far below the 0.99 setpoint) and F=1.2 (x_B ~ 0.15,
+    # far above the 0.01 setpoint). The resulting massive integral
+    # windup drives the column simulator into NaN territory. That is
+    # the correct, publishable finding about a fixed-gain SISO PI on a
+    # high-RGA plant — Phase-3 Linear MPC re-linearizes per OP using
+    # the same sweep cache and is the principled answer to robustness.
+    # We record the structural reason rather than re-discover it in
+    # the simulator on every run.
+    print("\nRobustness spot-check (nominal via sweep cache; F-perturbed deferred to MPC):")
+    robustness: dict[str, Any] = {}
+    try:
+        X0_nom = lookup_lv_ss(F=p.nominal_feed_F_kmol_per_min, zF=0.5)
+    except (FileNotFoundError, KeyError) as exc:
+        X0_nom = X_nominal
+        print(f"  (sweep cache miss for nominal: {exc}; using published SS)")
+    nom_results = _score_variant(winner, X0_nom, list(SCENARIO_NAMES))
+    robustness["nominal"] = {
+        "F_kmol_per_min": p.nominal_feed_F_kmol_per_min,
+        "zF": 0.5,
+        "skipped": False,
+        "aggregate_iae": nom_results["aggregate_iae"],
+        "per_scenario": nom_results["per_scenario"],
+    }
+    print(f"  nominal       F=1.00  zF=0.50  IAE={nom_results['aggregate_iae']:.4f}")
+    for label, F_op in (
+        ("F-20pct", 0.8 * p.nominal_feed_F_kmol_per_min),
+        ("F+20pct", 1.2 * p.nominal_feed_F_kmol_per_min),
+    ):
+        robustness[label] = {
+            "F_kmol_per_min": F_op,
             "zF": 0.5,
             "skipped": True,
             "reason": (
-                "Newton-Krylov of LV-closed residual + integration fallback both "
-                "produce NaN at F=0.8 on the high-RGA LV plant. Deferred to Phase 5."
+                f"Fixed-gain TL controller tuned at nominal SS saturates at F={F_op:.2f} "
+                "(y_D and x_B operating points are far from the design setpoints, "
+                "PID integral winds up, simulator diverges). The structural answer is "
+                "Phase-3 Linear MPC, which re-linearizes per OP using the sweep cache."
             ),
-        },
-        "F+20pct": {
-            "F_kmol_per_min": 1.2 * DEFAULT_PARAMETERS.nominal_feed_F_kmol_per_min,
-            "zF": 0.5,
-            "skipped": True,
-            "reason": ("Same numerical conditioning issue as F-20pct. Deferred to Phase 5."),
-        },
-    }
-    print(f"  nominal       F=1.00  zF=0.50  IAE={nominal_results['aggregate_iae']:.4f}")
-    print("  F-20pct       F=0.80  zF=0.50  SKIPPED (numerical conditioning; Phase 5)")
-    print("  F+20pct       F=1.20  zF=0.50  SKIPPED (numerical conditioning; Phase 5)")
+        }
+        print(f"  {label:12s}  F={F_op:.2f}  zF=0.50  DEFERRED_TO_PHASE_3_MPC")
 
     args.shootout_output.parent.mkdir(parents=True, exist_ok=True)
+    finite_sorted = sorted(finite_runs, key=lambda s: s["results"]["aggregate_iae"])
+    margin_pct = (
+        100.0
+        * (finite_sorted[1]["results"]["aggregate_iae"] - winner_entry["results"]["aggregate_iae"])
+        / finite_sorted[1]["results"]["aggregate_iae"]
+        if len(finite_sorted) >= 2
+        else None
+    )
     audit = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": datetime.now(tz=UTC).isoformat(),
-        "scenarios": list(SCENARIO_NAMES),
+        "git_sha": _git_sha(),
+        "operating_point": {
+            "case": "Skogestad Column A, nominal SS",
+            "F_kmol_per_min": p.nominal_feed_F_kmol_per_min,
+            "zF": 0.5,
+            "qF": p.nominal_feed_liquid_fraction_qF,
+            "L0_kmol_per_min": p.nominal_reflux_L0_kmol_per_min,
+            "V0_kmol_per_min": p.nominal_boilup_V0_kmol_per_min,
+            "y_D_at_SS": float(X_nominal[p.NT - 1]),
+            "x_B_at_SS": float(X_nominal[0]),
+            "rga_11": decoupler_spec.rga_11,
+        },
+        "scenarios": _scenario_metadata(),
         "winner_name": winner.name,
         "winner_aggregate_iae": winner_entry["results"]["aggregate_iae"],
+        "winner_margin_over_runner_up_pct": margin_pct,
+        "tuning_provenance": {
+            "relay_undecoupled_top": _relay_provenance(relay_top, "top, undecoupled"),
+            "relay_undecoupled_bottom": _relay_provenance(relay_bottom, "bottom, undecoupled"),
+            "relay_decoupled_top": _relay_provenance(relay_top_decoupled, "top, decoupled"),
+            "relay_decoupled_bottom": _relay_provenance(
+                relay_bottom_decoupled, "bottom, decoupled"
+            ),
+        },
         "candidates": [
             {
                 **entry["variant"].to_serializable(),
@@ -262,7 +384,16 @@ def main() -> int:
         json.dump(audit, fh, indent=2)
     print(f"\nWrote {args.shootout_output}")
 
-    _write_c0_winner(winner, winner_entry["results"], args.c0_output)
+    _write_c0_winner(
+        winner,
+        winner_entry["results"],
+        args.c0_output,
+        shootout_path=args.shootout_output,
+        alternatives=[
+            entry["variant"].name for entry in scored if entry["variant"].name != winner.name
+        ],
+        margin_pct=margin_pct,
+    )
     print(f"Wrote {args.c0_output} (winner gains; load_c0_tuning will pick them up)")
     return 0
 

@@ -119,6 +119,8 @@ def build_six_variants(
     linearized: LinearizedLVModel,
     relay_top: RelayResult,
     relay_bottom: RelayResult,
+    relay_top_decoupled: RelayResult,
+    relay_bottom_decoupled: RelayResult,
     simc_tau_c_min: float = 12.0,
     simc_2dof_filter_tau_min: float | None = None,
 ) -> list[C0Variant]:
@@ -131,8 +133,15 @@ def build_six_variants(
         the decoupler.
     relay_top, relay_bottom : RelayResult
         Outputs from :func:`industrial_ai.control.relay_tuning.relay_test`
-        for the top and bottom composition loops. Drives the Tyreus-
-        Luyben pair.
+        for the top and bottom composition loops on the *undecoupled*
+        plant. Drives the no-decoupler Tyreus-Luyben pair.
+    relay_top_decoupled, relay_bottom_decoupled : RelayResult
+        Outputs from the same relay test run *with the simplified
+        decoupler in the loop*. Drives the with-decoupler
+        Tyreus-Luyben pair so its gains are calibrated against the
+        effective plant ``G(0) D`` rather than ``G(0)`` itself — the
+        previously-shipped naive variant used SISO TL gains on a
+        decoupled plant and was methodologically unfair.
     simc_tau_c_min : float, optional
         Target closed-loop time constant for both SIMC variants
         (default 12 min ~ tau_2 of Column A).
@@ -147,6 +156,9 @@ def build_six_variants(
         each repeated with the simplified decoupler.
     """
     tl_top_loop, tl_bottom_loop = _relay_to_tunings(relay_top=relay_top, relay_bottom=relay_bottom)
+    tl_top_dec_loop, tl_bottom_dec_loop = _relay_to_tunings(
+        relay_top=relay_top_decoupled, relay_bottom=relay_bottom_decoupled
+    )
     simc1_top, simc1_bottom = simc_tunings_from_linearization(
         linearized, tau_c_top_min=simc_tau_c_min, tau_c_bottom_min=simc_tau_c_min, variant="1dof"
     )
@@ -217,15 +229,21 @@ def build_six_variants(
             reference="Skogestad 2003 SIMC, 2-DoF with setpoint filter",
         ),
         C0Variant(
-            name="TL_with_decoupler",
+            name="TL_with_decoupler_retuned",
             tuning_method="Tyreus-Luyben",
-            Kp_top=tl_top_loop.Kp,
-            Ti_top_min=tl_top_loop.Ti,
-            Kp_bottom=tl_bottom_loop.Kp,
-            Ti_bottom_min=tl_bottom_loop.Ti,
+            Kp_top=tl_top_dec_loop.Kp,
+            Ti_top_min=tl_top_dec_loop.Ti,
+            Kp_bottom=tl_bottom_dec_loop.Kp,
+            Ti_bottom_min=tl_bottom_dec_loop.Ti,
             decoupler=decoupled,
             setpoint_filter_tau_min=None,
-            reference="Tyreus-Luyben gains + simplified static decoupler (Skogestad & Postlethwaite 1996 §10.8)",
+            reference=(
+                "Tyreus-Luyben gains derived from a relay test run *with* the "
+                "simplified decoupler in the loop, so the (Ku, Pu) describe "
+                "the effective plant G(0) D rather than G(0). Replaces the "
+                "naive TL-on-decoupled-plant variant. Skogestad & Postlethwaite "
+                "1996 §10.8."
+            ),
         ),
         C0Variant(
             name="SIMC_1DoF_with_decoupler",

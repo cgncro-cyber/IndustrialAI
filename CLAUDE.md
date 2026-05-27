@@ -7,7 +7,7 @@
 **Name:** IndustrialAI — Safety-Gated Agentic Control for Coupled Multivariable Processes
 **Type:** Public research project (GitHub repo → arXiv preprint → conference paper)
 **Owner:** Christian Rosenthal
-**Status:** Phase 2 in progress (Day 2.5 closed, 2026-05-27). Phase 1 closed with the Skogestad Column A dynamic twin including CasADi symbolic Jacobians. Phase 2 progress: Day 1 — relay-feedback Tyreus-Luyben C0; Day 2 — 6-KPI suite + 5 canonical disturbance scenarios; Day 2.5 — 6-candidate PID tuning shootout ({TL, SIMC-1DoF, SIMC-2DoF} × {no decoupler, simplified decoupler with retuned SIMC against g_eff = g_ii / λ_ii}). Winner is TL_no_decoupler with aggregate IAE 0.8362 mole-fraction·min over 5 scenarios; decoupled variants are competitive (SIMC-1DoF+D: 1.18) but do not beat the relay-tuned SISO, matching the known structural limitation of static decoupling on high-RGA plants (Skogestad & Postlethwaite 1996 §10.8). 154 pytest cases pass; F-perturbed robustness OPs were deferred to Phase 5 due to LV plant's numerical conditioning. Next: Day 3 — C1 Linear MPC via do-mpc on the CasADi LV-closed model.
+**Status:** Phase 2 in progress (Day 2.6 closed, 2026-05-27). Phase 1 closed with the Skogestad Column A dynamic twin including CasADi symbolic Jacobians. Phase 2 progress: Day 1 — relay-feedback Tyreus-Luyben C0; Day 2 — 6-KPI suite + 5 canonical disturbance scenarios; Day 2.5 — 6-candidate PID tuning shootout; Day 2.6 — methodological fixes: (a) `TL_with_decoupler_retuned` now uses Tyreus-Luyben gains derived from a relay test run *with* the decoupler in the loop (replaces the naive variant), (b) `operating_window` exposes a sweep-cache lookup (`lookup_lv_ss`) so the off-nominal robustness check and the Phase-3 MPC linearizations share the same X0 source, (c) full audit JSON enriched with relay provenance, scenario metadata, RGA, git SHA, and `shootout_validation` block on the runtime tuning JSON. Winner remains TL_no_decoupler (aggregate IAE 0.8362); F-perturbed robustness explicitly deferred to Phase-3 MPC since fixed-gain TL does not extrapolate beyond its design OP (the publishable finding). 163 pytest cases pass. Next: Day 3 — C1 Linear MPC via do-mpc on the CasADi LV-closed model, re-linearizing per OP via the sweep cache.
 
 ## 2. Strategic Framing — Why This Project Exists
 
@@ -31,8 +31,8 @@ This is a **career-positioning project**, not a DBA-thesis project. The DBA work
 
 ## 4. Hard Boundaries
 
-- **No Momentive proprietary data, parameters, catalysts, or process details.** Ever. Public literature only.
-- **No silicones-specific framing in public deliverables.** Christian is exiting silicones — the chemistry is a generic case study.
+- **No Momentive (or any other company) proprietary data, parameters, catalysts, or process details in Phase 1–5.** Public literature only. A deferred Phase 6 industrial-validation track is governed separately by [ADR 008](./docs/decisions/008-deferred-real-data-validation.md), under a strict anonymization contract; until Phase 5 closes, the absolute prohibition stands.
+- **No silicones-specific framing in public deliverables.** Christian is exiting silicones — the chemistry is a generic case study. This applies to Phase 6 as well: anonymized real-plant data is disguised as a generic binary separation, never as silicones.
 - **No real customer or supplier names** in code, comments, commits, or docs.
 
 ## 5. Technical Architecture (locked-in decisions)

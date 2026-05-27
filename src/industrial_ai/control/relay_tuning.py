@@ -155,6 +155,7 @@ def relay_test(
     zF: float = 0.5,
     qF: float | None = None,
     n_cycles_for_estimate: int = 3,
+    mv_decoupler: npt.NDArray[np.float64] | None = None,
 ) -> RelayResult:
     """Run a relay-feedback experiment on the top or bottom composition loop.
 
@@ -192,6 +193,16 @@ def relay_test(
     n_cycles_for_estimate : int, optional
         Number of *trailing* full limit cycles to average for the
         ultimate-gain and ultimate-period estimates. Default 3.
+    mv_decoupler : numpy.ndarray of shape (2, 2), optional
+        Static decoupler applied to MV deviations from the
+        operating-point bias, matching the
+        :func:`industrial_ai.twin.simulate.simulate_lv_closed_loop`
+        semantics. When the decoupler is non-identity the resulting
+        ``(Ku, Pu)`` describes the *effective* plant seen by the
+        controlled loop, i.e. ``G(0) D`` rather than ``G(0)``. Used by
+        the Phase-2 shootout to retune Tyreus-Luyben gains
+        consistently against the decoupled plant. Default ``None``
+        leaves the relay test on the original LV plant.
 
     Returns
     -------
@@ -237,9 +248,24 @@ def relay_test(
         mv_value = bias + sign * relay_state * relay_amplitude_d
 
         if loop == "top":
-            LT, VB = mv_value, other_bias
+            LT_pid, VB_pid = mv_value, other_bias
         else:
-            LT, VB = other_bias, mv_value
+            LT_pid, VB_pid = other_bias, mv_value
+
+        # When a decoupler is in play, the relay output is interpreted
+        # as the PID-domain command and the actual MVs go through the
+        # static decoupler. With mv_decoupler=None (default) this
+        # reduces to the identity and the historical no-decoupler
+        # relay test is recovered exactly.
+        if mv_decoupler is None:
+            LT, VB = LT_pid, VB_pid
+        else:
+            top_bias_LT = parameters.nominal_reflux_L0_kmol_per_min
+            top_bias_VB = parameters.nominal_boilup_V0_kmol_per_min
+            pid_dev = np.array([LT_pid - top_bias_LT, VB_pid - top_bias_VB], dtype=np.float64)
+            actual_dev = mv_decoupler @ pid_dev
+            LT = top_bias_LT + float(actual_dev[0])
+            VB = top_bias_VB + float(actual_dev[1])
         U = assemble_inputs_lv(
             state=X, LT=LT, VB=VB, F=F, zF=zF, qF=qF, config=lv_config, parameters=parameters
         )

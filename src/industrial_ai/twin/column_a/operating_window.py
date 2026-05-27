@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from itertools import product
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
@@ -42,6 +43,7 @@ __all__ = [
     "GridSpec",
     "build_grid",
     "default_lv_grid_spec",
+    "lookup_lv_ss",
     "solve_lv_closed_steady_state",
     "sweep_operating_window",
 ]
@@ -96,12 +98,16 @@ def default_lv_grid_spec() -> GridSpec:
     - VB: +/-10 % around the published V0 = 3.20629
     - qF: 1.0 only (saturated liquid feed)
 
-    Default sizes: 6 x 6 x 6 x 5 x 1 = 1080 grid points.
+    Default sizes: 5 x 9 x 5 x 5 x 1 = 1125 grid points. The 5-point
+    F / LT_ratio / VB_ratio axes intentionally include the nominal
+    values (F=1.0, LT=L0, VB=V0) so downstream code can look up the
+    canonical operating point without a separate sweep — for example
+    :func:`lookup_lv_ss` for off-nominal robustness checks.
     """
     return GridSpec(
-        F=tuple(np.linspace(0.8, 1.2, 6).tolist()),
-        zF=tuple(np.linspace(0.3, 0.7, 6).tolist()),
-        LT_ratios=tuple(np.linspace(0.9, 1.1, 6).tolist()),
+        F=tuple(np.linspace(0.8, 1.2, 5).tolist()),
+        zF=tuple(np.linspace(0.3, 0.7, 9).tolist()),
+        LT_ratios=tuple(np.linspace(0.9, 1.1, 5).tolist()),
         VB_ratios=tuple(np.linspace(0.9, 1.1, 5).tolist()),
         qF=(1.0,),
     )
@@ -222,6 +228,7 @@ def sweep_operating_window(
     residual_tol: float = 1.0e-7,
     max_iter: int = 200,
     warm_start: bool = True,
+    states_path: Path | None = None,
 ) -> pd.DataFrame:
     """Sweep the operating window and return one DataFrame row per grid point.
 
@@ -244,6 +251,12 @@ def sweep_operating_window(
     warm_start : bool, optional
         If ``True`` (default), the previous successful solve seeds the
         next point. If ``False``, every point starts from ``X_init``.
+    states_path : pathlib.Path, optional
+        If given, the full state vector ``X_star`` for every converged
+        row is written to a companion parquet file with one column per
+        state index (``state_000``..``state_{2*NT-1}``) plus the input
+        keys ``F, zF, LT, VB, qF``. Use :func:`lookup_lv_ss` to query
+        the cache later. Failed rows are omitted from the parquet.
 
     Returns
     -------
@@ -257,6 +270,7 @@ def sweep_operating_window(
 
     NT = parameters.NT
     rows: list[dict[str, float | bool]] = []
+    states_rows: list[dict[str, float]] = []
     X_guess = X_init.copy()
     for point in build_grid(spec, parameters):
         X_star, residual_norm, success = solve_lv_closed_steady_state(
@@ -282,4 +296,102 @@ def sweep_operating_window(
         )
         if warm_start and success:
             X_guess = X_star
-    return pd.DataFrame(rows)
+        if states_path is not None and success:
+            states_rows.append(
+                {
+                    "F": point.F,
+                    "zF": point.zF,
+                    "LT": point.LT,
+                    "VB": point.VB,
+                    "qF": point.qF,
+                    **{f"state_{i:03d}": float(X_star[i]) for i in range(2 * NT)},
+                }
+            )
+    df = pd.DataFrame(rows)
+    if states_path is not None:
+        states_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(states_rows).to_parquet(states_path, index=False)
+    return df
+
+
+def lookup_lv_ss(
+    *,
+    F: float,
+    zF: float,
+    qF: float = 1.0,
+    LT: float | None = None,
+    VB: float | None = None,
+    states_path: Path | None = None,
+    parameters: ColumnAParameters = DEFAULT_PARAMETERS,
+    tol: float = 1.0e-6,
+) -> npt.NDArray[np.float64]:
+    """Return the cached LV-closed steady-state vector for an operating point.
+
+    Looks up the row in the sweep states parquet whose ``(F, zF, qF,
+    LT, VB)`` match the request within ``tol`` and returns the full
+    state vector. ``LT`` and ``VB`` default to the column's nominal
+    operating-point values.
+
+    Parameters
+    ----------
+    F, zF : float
+        Feed flow (kmol/min) and composition (mole fraction).
+    qF : float, optional
+        Feed liquid fraction. Default 1.0.
+    LT, VB : float, optional
+        Reflux and boilup. Default to the parameters' nominal
+        operating-point values.
+    states_path : pathlib.Path, optional
+        Override for the sweep states parquet. Defaults to
+        ``data/reference/operating_window_states.parquet`` at the
+        repo root.
+    parameters : ColumnAParameters, optional
+    tol : float, optional
+        Per-column absolute matching tolerance. Default 1e-6 — tight
+        enough to require exact (rather than nearest) lookups while
+        absorbing floating-point round-trip noise.
+
+    Returns
+    -------
+    numpy.ndarray of shape (2 * NT,)
+        Converged state vector at the requested operating point.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the states parquet does not exist (run
+        ``tools/run_operating_window_sweep.py`` first).
+    KeyError
+        If no row matches the requested operating point within ``tol``.
+    """
+    if states_path is None:
+        states_path = (
+            Path(__file__).resolve().parents[4]
+            / "data"
+            / "reference"
+            / "operating_window_states.parquet"
+        )
+    if not states_path.exists():
+        raise FileNotFoundError(
+            f"sweep states cache missing: {states_path}. "
+            "Run `uv run python tools/run_operating_window_sweep.py` first."
+        )
+    LT_q = parameters.nominal_reflux_L0_kmol_per_min if LT is None else LT
+    VB_q = parameters.nominal_boilup_V0_kmol_per_min if VB is None else VB
+    df = pd.read_parquet(states_path)
+    mask = (
+        np.isclose(df["F"], F, atol=tol)
+        & np.isclose(df["zF"], zF, atol=tol)
+        & np.isclose(df["qF"], qF, atol=tol)
+        & np.isclose(df["LT"], LT_q, atol=tol)
+        & np.isclose(df["VB"], VB_q, atol=tol)
+    )
+    hits = df[mask]
+    if len(hits) == 0:
+        raise KeyError(
+            f"no cached SS for (F={F}, zF={zF}, qF={qF}, LT={LT_q}, VB={VB_q}); "
+            f"extend the sweep grid or recompute on demand"
+        )
+    row = hits.iloc[0]
+    NT = parameters.NT
+    return np.array([row[f"state_{i:03d}"] for i in range(2 * NT)], dtype=np.float64)

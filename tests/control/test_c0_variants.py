@@ -11,6 +11,7 @@ from industrial_ai.control.c0_variants import (
     build_pids_for_variant,
     build_six_variants,
 )
+from industrial_ai.control.decoupler import simplified_decoupler
 from industrial_ai.control.relay_tuning import relay_test
 from industrial_ai.twin.column_a import DEFAULT_PARAMETERS
 from industrial_ai.twin.column_a.linearize import linearize_lv
@@ -20,7 +21,7 @@ from industrial_ai.twin.column_a.linearize import linearize_lv
 def shootout_inputs(
     skogestad_reference_state: npt.NDArray[np.float64],
 ) -> tuple:
-    """Linearization + relay tests at the published nominal SS.
+    """Linearization + relay tests (undecoupled + decoupled) at the nominal SS.
 
     Scoped to *module* so the expensive relay tests run once per file.
     """
@@ -33,29 +34,48 @@ def shootout_inputs(
         zF_ss=0.5,
         backend="casadi",
     )
+    decoupler = simplified_decoupler(lin)
+    relay_kwargs = {
+        "X0": skogestad_reference_state,
+        "relay_amplitude_d": 0.5,
+        "hysteresis": 5e-3,
+        "duration_min": 400.0,
+    }
     rt = relay_test(
         loop="top",
-        X0=skogestad_reference_state,
         setpoint=float(skogestad_reference_state[p.NT - 1]),
-        relay_amplitude_d=0.5,
-        hysteresis=5e-3,
-        duration_min=400.0,
+        **relay_kwargs,
     )
     rb = relay_test(
         loop="bottom",
-        X0=skogestad_reference_state,
         setpoint=float(skogestad_reference_state[0]),
-        relay_amplitude_d=0.5,
-        hysteresis=5e-3,
-        duration_min=400.0,
+        **relay_kwargs,
     )
-    return lin, rt, rb
+    rt_d = relay_test(
+        loop="top",
+        setpoint=float(skogestad_reference_state[p.NT - 1]),
+        mv_decoupler=decoupler.matrix,
+        **relay_kwargs,
+    )
+    rb_d = relay_test(
+        loop="bottom",
+        setpoint=float(skogestad_reference_state[0]),
+        mv_decoupler=decoupler.matrix,
+        **relay_kwargs,
+    )
+    return lin, rt, rb, rt_d, rb_d
 
 
 def test_six_variants_are_built(shootout_inputs: tuple) -> None:
     """build_six_variants returns exactly six distinct candidates."""
-    lin, rt, rb = shootout_inputs
-    variants = build_six_variants(linearized=lin, relay_top=rt, relay_bottom=rb)
+    lin, rt, rb, rt_d, rb_d = shootout_inputs
+    variants = build_six_variants(
+        linearized=lin,
+        relay_top=rt,
+        relay_bottom=rb,
+        relay_top_decoupled=rt_d,
+        relay_bottom_decoupled=rb_d,
+    )
     assert len(variants) == 6
     names = {v.name for v in variants}
     assert len(names) == 6
@@ -65,8 +85,14 @@ def test_three_tuning_methods_each_with_and_without_decoupler(
     shootout_inputs: tuple,
 ) -> None:
     """The matrix is {TL, SIMC-1DoF, SIMC-2DoF} x {no decoupler, with decoupler}."""
-    lin, rt, rb = shootout_inputs
-    variants = build_six_variants(linearized=lin, relay_top=rt, relay_bottom=rb)
+    lin, rt, rb, rt_d, rb_d = shootout_inputs
+    variants = build_six_variants(
+        linearized=lin,
+        relay_top=rt,
+        relay_bottom=rb,
+        relay_top_decoupled=rt_d,
+        relay_bottom_decoupled=rb_d,
+    )
     methods = {v.tuning_method for v in variants}
     assert methods == {"Tyreus-Luyben", "SIMC-1DoF", "SIMC-2DoF"}
     no_dec = [v for v in variants if v.decoupler.rga_11 == 1.0]
@@ -77,8 +103,14 @@ def test_three_tuning_methods_each_with_and_without_decoupler(
 
 def test_2dof_variants_carry_a_setpoint_filter(shootout_inputs: tuple) -> None:
     """Only the SIMC-2DoF variants must specify a setpoint-filter time constant."""
-    lin, rt, rb = shootout_inputs
-    variants = build_six_variants(linearized=lin, relay_top=rt, relay_bottom=rb)
+    lin, rt, rb, rt_d, rb_d = shootout_inputs
+    variants = build_six_variants(
+        linearized=lin,
+        relay_top=rt,
+        relay_bottom=rb,
+        relay_top_decoupled=rt_d,
+        relay_bottom_decoupled=rb_d,
+    )
     for v in variants:
         if v.tuning_method == "SIMC-2DoF":
             assert v.setpoint_filter_tau_min is not None
@@ -91,8 +123,14 @@ def test_decoupled_simc_has_larger_kp_than_undecoupled(
     shootout_inputs: tuple,
 ) -> None:
     """SIMC-with-decoupler must compensate for the shrunk effective gain."""
-    lin, rt, rb = shootout_inputs
-    variants = build_six_variants(linearized=lin, relay_top=rt, relay_bottom=rb)
+    lin, rt, rb, rt_d, rb_d = shootout_inputs
+    variants = build_six_variants(
+        linearized=lin,
+        relay_top=rt,
+        relay_bottom=rb,
+        relay_top_decoupled=rt_d,
+        relay_bottom_decoupled=rb_d,
+    )
     by_name = {v.name: v for v in variants}
     simc_no_dec = by_name["SIMC_1DoF_no_decoupler"]
     simc_with_dec = by_name["SIMC_1DoF_with_decoupler"]
@@ -104,8 +142,14 @@ def test_decoupled_simc_has_larger_kp_than_undecoupled(
 
 def test_pid_builder_directions_match_loop_physics(shootout_inputs: tuple) -> None:
     """Top loop is direct-acting; bottom loop is reverse-acting, on every variant."""
-    lin, rt, rb = shootout_inputs
-    variants = build_six_variants(linearized=lin, relay_top=rt, relay_bottom=rb)
+    lin, rt, rb, rt_d, rb_d = shootout_inputs
+    variants = build_six_variants(
+        linearized=lin,
+        relay_top=rt,
+        relay_bottom=rb,
+        relay_top_decoupled=rt_d,
+        relay_bottom_decoupled=rb_d,
+    )
     p = DEFAULT_PARAMETERS
     for v in variants:
         top, bottom = build_pids_for_variant(
@@ -119,8 +163,14 @@ def test_pid_builder_directions_match_loop_physics(shootout_inputs: tuple) -> No
 
 def test_pid_builder_seeds_integrals_for_bias(shootout_inputs: tuple) -> None:
     """At zero error, the built PID outputs the bias MV — the seeded-integral contract."""
-    lin, rt, rb = shootout_inputs
-    variants = build_six_variants(linearized=lin, relay_top=rt, relay_bottom=rb)
+    lin, rt, rb, rt_d, rb_d = shootout_inputs
+    variants = build_six_variants(
+        linearized=lin,
+        relay_top=rt,
+        relay_bottom=rb,
+        relay_top_decoupled=rt_d,
+        relay_bottom_decoupled=rb_d,
+    )
     p = DEFAULT_PARAMETERS
     L0 = p.nominal_reflux_L0_kmol_per_min
     V0 = p.nominal_boilup_V0_kmol_per_min
@@ -136,8 +186,14 @@ def test_variant_is_json_serializable(shootout_inputs: tuple) -> None:
     """to_serializable() returns dict-compatible content (round-trip via JSON)."""
     import json
 
-    lin, rt, rb = shootout_inputs
-    variants = build_six_variants(linearized=lin, relay_top=rt, relay_bottom=rb)
+    lin, rt, rb, rt_d, rb_d = shootout_inputs
+    variants = build_six_variants(
+        linearized=lin,
+        relay_top=rt,
+        relay_bottom=rb,
+        relay_top_decoupled=rt_d,
+        relay_bottom_decoupled=rb_d,
+    )
     blob = json.dumps([v.to_serializable() for v in variants])
     back = json.loads(blob)
     assert len(back) == 6
