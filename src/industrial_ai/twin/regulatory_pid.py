@@ -33,16 +33,20 @@ __all__ = ["PIDController", "PIDState"]
 
 @dataclass(slots=True)
 class PIDState:
-    """Mutable internal state of a velocity-form PID controller.
+    """Mutable internal state of the positional-form PID controller.
 
     Attributes
     ----------
     integral : float
-        Running integral of the error.
+        Running integral of the error. Frozen by the
+        conditional-integration anti-windup whenever the unclipped
+        output is saturated against the error direction.
     previous_error : float
         Last-seen error, used by the derivative term.
     previous_output : float
-        Last commanded output, used for anti-windup back-calculation.
+        Last commanded output. Exposed for downstream logging and for
+        callers that seed the controller at an operating-point bias;
+        not consumed by :meth:`PIDController.step` itself.
     """
 
     integral: float = 0.0
