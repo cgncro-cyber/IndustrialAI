@@ -155,21 +155,30 @@ def build_skogestad_phase1_pids(
         seeded here so a small initial error does not produce a large
         initial commanded MV swing).
     """
+    Kp_top, Ki_top = 2.5, 2.5 / 30.0
+    Kp_bottom, Ki_bottom = 2.5, 2.5 / 30.0
+    # Top is direct-acting (more LT -> y_D rises), bottom is reverse-
+    # acting (more VB -> x_B drops). Positional-form PI: seed the
+    # integral so that at zero error the controller output equals the
+    # bias MV (LT_initial/VB_initial); without this the first tick at
+    # the operating point outputs 0 and the loop is stuck.
     top = PIDController(
-        Kp=2.5,
-        Ki=2.5 / 30.0,
-        output_min=0.0,
-        output_max=10.0,
-        direct_acting=False,
-    )
-    top.state.previous_output = LT_initial
-    bottom = PIDController(
-        Kp=2.5,
-        Ki=2.5 / 30.0,
+        Kp=Kp_top,
+        Ki=Ki_top,
         output_min=0.0,
         output_max=10.0,
         direct_acting=True,
     )
+    top.state.integral = LT_initial / Ki_top
+    top.state.previous_output = LT_initial
+    bottom = PIDController(
+        Kp=Kp_bottom,
+        Ki=Ki_bottom,
+        output_min=0.0,
+        output_max=10.0,
+        direct_acting=False,
+    )
+    bottom.state.integral = VB_initial / Ki_bottom
     bottom.state.previous_output = VB_initial
     return top, bottom
 
