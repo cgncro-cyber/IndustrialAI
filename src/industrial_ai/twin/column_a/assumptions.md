@@ -129,12 +129,18 @@ the same canonical system so reviewers can cross-check.
     initial guess. Long-time integration (~20 000 min) is used for the
     cold-start nominal SS, matching `cola_init.m`.
     *Source: cola_init.m, this code.*
-18. **Numerical Jacobian.** Linearization for the Phase 2 Linear MPC
-    baseline uses central-difference finite differences with a
-    relative step of `sqrt(eps_machine) ~ 1.5e-8`, evaluated at the
-    current steady state. Future Phase 1 add-on (Days 9–10) replaces
-    this with a CasADi symbolic-gradient layer.
-    *Source: this code, with the add-on path tracked in PROJECT_PLAN.md.*
+18. **Symbolic Jacobian via CasADi.** Linearization for the Phase 2
+    Linear MPC baseline uses exact algorithmic-differentiation
+    Jacobians produced by a CasADi symbolic re-implementation of the
+    ODE (`column_a/casadi_model.py`). The numpy implementation in
+    `model.py` remains the integration target and the validation
+    oracle; the CasADi build is purely the differentiation backend.
+    Parity with central-difference Jacobians is enforced by
+    `tests/twin/test_casadi_model.py` to ~1e-5, and the
+    Skogestad 1997 mini-gate scalar invariants (G^LV(0), τ₁, τ₂, τ₃)
+    pass identically under either backend. Switch via
+    `linearize_lv(backend="finite_difference" | "casadi")`.
+    *Source: CasADi 3.7 algorithmic differentiation, this code.*
 
 ## 6. What is *not* modeled
 

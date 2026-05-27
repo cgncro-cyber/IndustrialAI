@@ -22,6 +22,7 @@ composition ``y_D = X[NT-1]`` and the bottom composition
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -42,6 +43,8 @@ __all__ = [
     "linearize_lv",
     "steady_state_gain",
 ]
+
+LinearizeBackend = Literal["finite_difference", "casadi"]
 
 StateVector = npt.NDArray[np.float64]
 
@@ -95,56 +98,25 @@ def _rhs_lv(
     return column_a_rhs(0.0, X, U, parameters)
 
 
-def linearize_lv(
+def _jacobians_finite_difference(
     *,
     X_ss: StateVector,
     L_ss: float,
     V_ss: float,
     F_ss: float,
     zF_ss: float,
-    qF_ss: float = 1.0,
-    parameters: ColumnAParameters = DEFAULT_PARAMETERS,
-    lv_config: LVConfiguration | None = None,
-    fd_step_rel: float = 1.0e-6,
-) -> LinearizedLVModel:
-    """Compute the LV-configuration linearization at the given operating point.
-
-    Uses central finite differences. The step size for each component
-    is ``max(abs(value) * fd_step_rel, 1e-10)``, which keeps the
-    derivative both relative-scale-aware and numerically safe near
-    zero (e.g., for the reboiler composition ``x_B ≈ 0.01``).
-
-    Parameters
-    ----------
-    X_ss : numpy.ndarray of shape (2 * NT,)
-        Operating-point state vector (typically the long-time
-        integration result at nominal inputs).
-    L_ss, V_ss : float
-        Reflux and boilup at the operating point (kmol/min).
-    F_ss, zF_ss : float
-        Feed rate (kmol/min) and feed composition (mole fraction).
-    qF_ss : float, optional
-        Feed liquid fraction. Defaults to 1 (saturated liquid feed),
-        matching Skogestad's canonical case.
-    parameters : ColumnAParameters, optional
-        Column specification.
-    lv_config : LVConfiguration, optional
-        LV-level-loop configuration. Defaults to Skogestad's cola_lv.m
-        gains.
-    fd_step_rel : float, optional
-        Relative finite-difference step size.
-
-    Returns
-    -------
-    LinearizedLVModel
-    """
-    cfg = lv_config if lv_config is not None else LVConfiguration()
-    p = parameters
-    NT = p.NT
-    n_states = 2 * NT
+    qF_ss: float,
+    parameters: ColumnAParameters,
+    lv_config: LVConfiguration,
+    fd_step_rel: float,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """Central-difference Jacobians ``(A, B)`` — historical default backend."""
+    n_states = 2 * parameters.NT
 
     def f(X: StateVector, L: float, V: float, F: float, zF: float) -> StateVector:
-        return _rhs_lv(X, L=L, V=V, F=F, zF=zF, qF=qF_ss, parameters=p, lv_config=cfg)
+        return _rhs_lv(
+            X, L=L, V=V, F=F, zF=zF, qF=qF_ss, parameters=parameters, lv_config=lv_config
+        )
 
     def _fd_step(value: float) -> float:
         return max(abs(value) * fd_step_rel, 1.0e-10)
@@ -167,6 +139,118 @@ def linearize_lv(
         kwargs_minus[name] = ss_value - h
         B[:, col] = (f(X_ss, **kwargs_plus) - f(X_ss, **kwargs_minus)) / (2.0 * h)
 
+    return A, B
+
+
+def _jacobians_casadi(
+    *,
+    X_ss: StateVector,
+    L_ss: float,
+    V_ss: float,
+    F_ss: float,
+    zF_ss: float,
+    qF_ss: float,
+    parameters: ColumnAParameters,
+    lv_config: LVConfiguration,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """Exact symbolic Jacobians ``(A, B)`` via the CasADi backend."""
+    # Imported lazily so the finite-difference backend stays usable on
+    # installations without CasADi.
+    from industrial_ai.twin.column_a.casadi_model import (
+        build_lv_jacobians,
+        evaluate_lv_jacobians,
+    )
+
+    jacs = build_lv_jacobians(parameters=parameters, lv_config=lv_config, qF=qF_ss)
+    return evaluate_lv_jacobians(jacs, X=X_ss, L=L_ss, V=V_ss, F=F_ss, zF=zF_ss)
+
+
+def linearize_lv(
+    *,
+    X_ss: StateVector,
+    L_ss: float,
+    V_ss: float,
+    F_ss: float,
+    zF_ss: float,
+    qF_ss: float = 1.0,
+    parameters: ColumnAParameters = DEFAULT_PARAMETERS,
+    lv_config: LVConfiguration | None = None,
+    fd_step_rel: float = 1.0e-6,
+    backend: LinearizeBackend = "finite_difference",
+) -> LinearizedLVModel:
+    """Compute the LV-configuration linearization at the given operating point.
+
+    Two backends are available:
+
+    - ``"finite_difference"`` (default): central differences on the
+      numpy rhs, with step size ``max(|value| * fd_step_rel, 1e-10)``
+      per component. Robust, dependency-free, and the implementation
+      against which the original Phase 1 mini-gate was validated.
+    - ``"casadi"``: exact symbolic Jacobians via CasADi algorithmic
+      differentiation. Faster, machine-precision accurate, and the
+      same backend the Phase 2 Linear MPC baseline (``do-mpc``)
+      consumes natively. Identical numerical result to the finite-
+      difference backend to ~1e-5 — see
+      ``tests/twin/test_casadi_model.py``.
+
+    Parameters
+    ----------
+    X_ss : numpy.ndarray of shape (2 * NT,)
+        Operating-point state vector (typically the long-time
+        integration result at nominal inputs).
+    L_ss, V_ss : float
+        Reflux and boilup at the operating point (kmol/min).
+    F_ss, zF_ss : float
+        Feed rate (kmol/min) and feed composition (mole fraction).
+    qF_ss : float, optional
+        Feed liquid fraction. Defaults to 1 (saturated liquid feed),
+        matching Skogestad's canonical case.
+    parameters : ColumnAParameters, optional
+        Column specification.
+    lv_config : LVConfiguration, optional
+        LV-level-loop configuration. Defaults to Skogestad's cola_lv.m
+        gains.
+    fd_step_rel : float, optional
+        Relative finite-difference step size. Ignored when
+        ``backend="casadi"``.
+    backend : {"finite_difference", "casadi"}, optional
+        Differentiation backend.
+
+    Returns
+    -------
+    LinearizedLVModel
+    """
+    cfg = lv_config if lv_config is not None else LVConfiguration()
+    p = parameters
+    NT = p.NT
+
+    if backend == "casadi":
+        A, B = _jacobians_casadi(
+            X_ss=X_ss,
+            L_ss=L_ss,
+            V_ss=V_ss,
+            F_ss=F_ss,
+            zF_ss=zF_ss,
+            qF_ss=qF_ss,
+            parameters=p,
+            lv_config=cfg,
+        )
+    elif backend == "finite_difference":
+        A, B = _jacobians_finite_difference(
+            X_ss=X_ss,
+            L_ss=L_ss,
+            V_ss=V_ss,
+            F_ss=F_ss,
+            zF_ss=zF_ss,
+            qF_ss=qF_ss,
+            parameters=p,
+            lv_config=cfg,
+            fd_step_rel=fd_step_rel,
+        )
+    else:
+        raise ValueError(f"unknown backend {backend!r}; expected 'finite_difference' or 'casadi'")
+
+    n_states = 2 * NT
     C = np.zeros((2, n_states), dtype=np.float64)
     C[0, NT - 1] = 1.0  # y_D
     C[1, 0] = 1.0  # x_B

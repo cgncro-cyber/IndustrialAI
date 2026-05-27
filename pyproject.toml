@@ -99,6 +99,7 @@ module = [
     "langchain_core.*",
     "langchain_openai.*",
     "do_mpc.*",
+    "casadi",
     "scipy.*",
     "pandas.*",
     "yaml",

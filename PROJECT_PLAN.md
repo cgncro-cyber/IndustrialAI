@@ -18,7 +18,22 @@ The project follows a strict two-layer hierarchical control architecture — see
 
 **Case study choice:** Skogestad's Column A — 40-stage binary distillation, relative volatility 1.5, 99 % purity products, with LV, DV, and L/D-V/B configurations (see ADR 007). Single column for Phase 1; extension to a two-column direct sequence is a deferred Phase 2 decision-junction if PID and Linear MPC results turn out too close.
 
-### Progress snapshot (Day 8 closed, Phase 1 gate cleared, 2026-05-27)
+### Progress snapshot (Days 9–10 closed, Phase 1 complete, 2026-05-27)
+
+Days 9–10 add the optional CasADi symbolic-gradient layer
+(`column_a/casadi_model.py`). The numpy ODE remains the integration
+target; CasADi provides the *differentiation* backend used by
+`linearize_lv(backend="casadi")` and consumed by the Phase 2 Linear
+MPC baseline (`do-mpc`) natively. Parity tests confirm: (a) the
+symbolic open-loop rhs matches the numpy rhs to machine epsilon at
+the published SS and at a perturbed state; (b) the symbolic LV
+Jacobians match central differences to ~1e-5 across the full 82×82
+A and 82×4 B matrices; (c) the Skogestad 1997 mini-gate invariants
+(G^LV(0), τ₁, τ₂, τ₃) pass identically under both backends. The
+finite-difference backend stays the default so the
+Phase 1 mini-gate retains its original validation lineage.
+
+
 
 Day 1–4 deliverables landed in commits `6f88ce9` / `1079c39` / `7e15787`; Day 5 in `aec4b9d` (DV configuration); Day 6 in `efd7add` (LDVB configuration). The Day-4 mini-gate is green: G^LV(0) matches Skogestad 1997 Eq. (31) within 0.01 %, τ₁ within 0.04 %, τ₂/τ₃ within 0.5 %/0.3 %, and three Octave-cross-checked step trajectories (L +1 %, z_F −10 %, F +10 %) match within 1e-6.
 
@@ -75,9 +90,9 @@ Every run produced by the Phase 1 twin must populate `data/runs/<config>/<scenar
 
 Without this logging contract in place at the end of Phase 1, no later phase's figures can be regenerated.
 
-### Optional Phase 1 add-on (defer-or-include decision at start)
+### Phase 1 add-on (done)
 
-- **CasADi symbolic-gradient layer** (~1.5 additional days). Makes Phase 2 Linear MPC via `do-mpc` significantly cleaner than finite-difference Jacobians. Optional — does not block Phase 2 but recommended if Phase 1 has buffer.
+- ✓ **CasADi symbolic-gradient layer** (Days 9–10). `column_a/casadi_model.py` re-implements the ODE in `casadi.SX`, exposing exact df/dx and df/d[L,V,F,zF] for the LV-closed plant. `linearize_lv` now accepts `backend="casadi"`. Parity with the finite-difference backend is enforced by 4 dedicated tests; Skogestad mini-gate invariants pass under both backends.
 
 ### Gate
 
