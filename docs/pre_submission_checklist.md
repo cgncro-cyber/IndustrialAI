@@ -49,6 +49,14 @@ Do **not** pre-commit to a binary "agent must beat MPC by X %" success threshold
 
 **Process.** At Phase 3 kickoff, draft one Methods paragraph per bucket. After empirical results, select the matching one and discard the others. The acceptance criterion for Phase 3 is *not* "Bucket A reached"; it is "results unambiguously map to exactly one bucket."
 
+**Updated bucket-probability assessment after Day-3 C1 results (2026-05-27).** Day-3 produced an aggregate C1/C0 ratio of 6.8× (C1 IAE 0.1224 vs C0 IAE 0.8362), winning all 5 of 5 scenarios. The C1 baseline is therefore much stronger than originally anticipated, which makes Bucket A harder and Bucket B more attractive. Pre-Phase-3 probability re-estimate:
+
+- Bucket A: ~15 % (down from ~35 %). 0.12 aggregate IAE is a high bar for an agentic layer to beat across the same nominal-OP scenario set.
+- Bucket B: ~60 % (up from ~40 %). Two empirical signals point here: (i) the zF_step_+10 % scenario shows only a 1.5× C1-over-C0 gap, indicating that C1's linear-model assumptions weaken under coupled disturbances; (ii) C0's fixed-gain TL does not extrapolate to F ± 20 % OPs (§4.4), and C1's per-OP linearization inherits a milder version of the same locality. An agent that re-evaluates the linearization point or switches setpoint targets under regime change is well-positioned to exploit this gap.
+- Bucket C: ~25 % (unchanged). Orthogonal to the agent-vs-MPC gap; depends on Phase-4 detector design.
+
+**Implication for Phase 3 design.** Engineer the disturbance scenario set for C2 to include explicit off-nominal and regime-change evaluation, not only the five nominal-OP scenarios used for C0/C1. The off-nominal-robustness KPI (§5.2) needs to be operationalized before the agent is built, not after.
+
 ### 2.3 Phase 4 — safety-gate cross-domain transfer outcome handling
 
 Already enumerated in `PROJECT_PLAN.md` Phase 4 ("cross-domain primary, in-domain fallback"). No further pre-commit needed; documented here for visibility.
@@ -122,14 +130,21 @@ Day-2.6 verification confirmed that the 2DoF setpoint filter is active (lower pe
 
 **External recommendation considered and rejected (2026-05-27).** An external advisor recommended pre-emptively swapping the primary to vanilla Llama 3.3 70B and the ablation from Qwen to Mistral Small 3 for "Western industry acceptance". Rejected for three reasons: (a) the advisor conflated Nemotron-Super-49B v1.5 with vanilla Llama 3.3 70B — Nemotron is NVIDIA's reasoning- and agentic-post-trained variant built on Llama 3.3, specifically targeting the tool-calling and multi-step coherence needs of this project; vanilla Llama 3.3 70B lacks the post-training layer. (b) The "too Chinese" framing for Qwen is provincial in 2026; the Qwen ablation is a methodological *strength* (cross-family diversity), not a credibility weakness; swapping to Mistral would reduce ablation diversity (both Mistral and Llama are Western dense reasoning-tuned models). (c) The recommendation violates ADR 005's explicit "revisit only on Phase 3 evidence" rule. Decision: stay the course; re-evaluate per ADR 005 trigger.
 
-### 5.2 KPI set and outcome buckets — formal definition session
+### 5.2 KPI set and outcome buckets — RESOLVED 2026-05-27
 
-Open item flagged by external review and internal critique: the KPI set used for Phase 2 comparison (aggregate IAE over five scenarios) is the *baseline*, but Phase 3 outcome buckets (see §2.2) require additional KPIs to discriminate between buckets:
+Open item flagged by external review and internal critique: the KPI set used for Phase 2 comparison (aggregate IAE over five scenarios) was the *baseline*, but Phase 3 outcome buckets (see §2.2) required additional KPIs to discriminate between buckets.
 
-- For Bucket B, an *off-nominal robustness KPI* is needed — e.g., max IAE under F ± 20 %, zF ± 20 % perturbations relative to nominal.
-- For Bucket C, a *constraint-violation rate KPI* is needed — count of agent proposals blocked by the safety gate, with downstream "what would have happened" evaluation on a forked twin trajectory.
+**Resolved by `docs/kpis.md` (initial draft 2026-05-27).** Five KPIs defined:
 
-**Action.** A 1–2-hour KPI-definition session before Phase 3 starts. Output: a section in `docs/figures.md` or a new `docs/kpis.md` codifying the full KPI set, with computation pseudocode where ambiguous.
+1. `aggregate_iae` — primary headline metric, frozen against the canonical 5-scenario set.
+2. `off_nominal_robustness_iae` — P95 over a 16-point off-nominal OP grid; Bucket B discriminator.
+3. `constraint_violation_intercept_rate` + `constraint_violation_detection_rate` — with forked-twin counterfactual; Bucket C discriminator.
+4. `linearization_consistency` — auxiliary diagnostic supporting the Bucket B story.
+5. `supervisory_cycle_wallclock` — deployability/production-readiness diagnostic with soft gate.
+
+The bucket classification decision tree (`kpis.md` §6) operationalizes the *"unambiguous mapping to one bucket"* criterion from §2.2 above, including the explicit Step-5 failure mode (results ambiguous → methodology revisit, not data massage).
+
+**Action at Phase 3 kickoff.** Review of the four open items at the end of `docs/kpis.md` is **complete** (2026-05-27, see `kpis.md` "Review resolutions" section). The KPI set is locked: 30-min counterfactual horizon + 5-min fast-fail sub-check, 16-point off-nominal grid + 4-point screening grid for prompt iteration, 9-item safety constraint list including M_D / M_B holdup bounds, three-band Bucket B threshold (1.5× minimum, 2.0× strong evidence). Phase 3 implementation can target stable definitions.
 
 ---
 
@@ -147,3 +162,6 @@ Open item flagged by external review and internal critique: the KPI set used for
 
 - 2026-05-27 (initial) — Initial version. Captures Day-2.5 shootout outcomes, external review feedback (Phase-3 outcome buckets, false-negative deliverable), and the LLM-stack alignment question raised at Phase-2 close.
 - 2026-05-27 (Day 2.6 close) — §1.1 resolved (sweep-cache lookup landed, commit d575387). §1.2 added: F±20 % TL extrapolation reframed from "deferred fix" to "publishable C0 limitation". §2.1 resolved: Outcome A confirmed empirically (TL_decoupled_retuned IAE 2.81), Outcome B paragraph discarded. §4.4 added: fixed-gain-TL non-extrapolation as paper-disclosed limitation. §4.5 added: SIMC 2DoF filter active but scenario-mix-masked. §5.1 augmented: audit-trail for the considered-and-rejected external LLM-swap recommendation.
+- 2026-05-27 (Phase 2 close / Day 3 results) — §2.2 augmented with empirical bucket-probability re-estimate after Day-3 C1 results. Aggregate C1/C0 ratio 6.8× (5/5 scenarios won by C1, max wall-clock 345 ms per supervisory tick). Bucket B becomes the most likely outcome; Bucket A becomes harder. Phase 3 scenario design must include off-nominal/regime-change evaluation, not only nominal-OP disturbances.
+- 2026-05-27 (KPI session) — §5.2 resolved. `docs/kpis.md` drafted with five KPIs (aggregate_iae, off_nominal_robustness_iae, constraint_violation_intercept_rate + detection_rate, linearization_consistency, supervisory_cycle_wallclock) and a bucket-classification decision tree. Four open items at the end of `kpis.md` require yes/keep review before Phase 3 kickoff.
+- 2026-05-27 (KPI review closed) — Four review items in `kpis.md` resolved: 30-min counterfactual horizon retained + 5-min fast-fail sub-check added; 16-point off-nominal grid retained + 4-point screening grid for prompt iteration; safety constraint list expanded from 7 to 9 (added M_D / M_B holdup bounds, fixed citation to `column_a/assumptions.md`); Bucket B threshold three-band interpretation (1.5× minimum / 2.0× strong evidence). KPI set is locked. §5.2 above updated to reflect closure.
