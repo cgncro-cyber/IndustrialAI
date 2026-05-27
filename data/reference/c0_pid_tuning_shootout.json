@@ -1,0 +1,550 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-05-27T14:37:09.439541+00:00",
+  "scenarios": [
+    "F_step_+20pct",
+    "F_step_-20pct",
+    "zF_step_+10pct",
+    "zF_step_-10pct",
+    "yD_setpoint_+0p5pct"
+  ],
+  "winner_name": "TL_no_decoupler",
+  "winner_aggregate_iae": 0.8362269141725175,
+  "candidates": [
+    {
+      "name": "TL_no_decoupler",
+      "tuning_method": "Tyreus-Luyben",
+      "Kp_top": 38.33521973114844,
+      "Ti_top_min": 23.995364264747955,
+      "Kp_bottom": 37.94544564407735,
+      "Ti_bottom_min": 11.852898953445981,
+      "decoupler": {
+        "matrix": [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ],
+        "rga_11": 1.0,
+        "g_effective_diag": [
+          null,
+          null
+        ]
+      },
+      "setpoint_filter_tau_min": null,
+      "reference": "Tyreus & Luyben 1992; relay test per Astrom-Hagglund 1984",
+      "results": {
+        "per_scenario": {
+          "F_step_+20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.040369460253845,
+            "light_yield": 0.9759660049142133,
+            "constraint_violations": 1201,
+            "settling_time_min": 45.150000000000006,
+            "mv_activity_kmol_per_min": 0.9191249655214144,
+            "iae_mole_fraction_min": 0.33115427978893275
+          },
+          "F_step_-20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 7.0241411078998235,
+            "light_yield": 1.006060584476521,
+            "constraint_violations": 117,
+            "settling_time_min": 40.550000000000004,
+            "mv_activity_kmol_per_min": 0.8786825947362322,
+            "iae_mole_fraction_min": 0.3037787718521129
+          },
+          "zF_step_+10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 5.996796217591855,
+            "light_yield": 0.9798450211673937,
+            "constraint_violations": 1201,
+            "settling_time_min": 0.0,
+            "mv_activity_kmol_per_min": 0.05684392150310247,
+            "iae_mole_fraction_min": 0.018017112466724848
+          },
+          "zF_step_-10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.897051534984602,
+            "light_yield": 1.002452943917119,
+            "constraint_violations": 940,
+            "settling_time_min": 0.0,
+            "mv_activity_kmol_per_min": 0.06171319811630438,
+            "iae_mole_fraction_min": 0.017931280693967704
+          },
+          "yD_setpoint_+0p5pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.904007186615723,
+            "light_yield": 0.9632000330909116,
+            "constraint_violations": 1201,
+            "settling_time_min": 28.450000000000003,
+            "mv_activity_kmol_per_min": 0.5443304334927976,
+            "iae_mole_fraction_min": 0.16534546937077932
+          }
+        },
+        "aggregate_iae": 0.8362269141725175,
+        "any_failure": false
+      }
+    },
+    {
+      "name": "SIMC_1DoF_no_decoupler",
+      "tuning_method": "SIMC-1DoF",
+      "Kp_top": 18.464718217602385,
+      "Ti_top_min": 48.0,
+      "Kp_bottom": 14.718114913318061,
+      "Ti_bottom_min": 48.0,
+      "decoupler": {
+        "matrix": [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ],
+        "rga_11": 1.0,
+        "g_effective_diag": [
+          null,
+          null
+        ]
+      },
+      "setpoint_filter_tau_min": null,
+      "reference": "Skogestad 2003 SIMC, 1-DoF PI form",
+      "results": {
+        "per_scenario": {
+          "F_step_+20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 5.826868468187581,
+            "light_yield": 0.967483449618965,
+            "constraint_violations": 1201,
+            "settling_time_min": 46.050000000000004,
+            "mv_activity_kmol_per_min": 0.44817299320128967,
+            "iae_mole_fraction_min": 0.6848017995877564
+          },
+          "F_step_-20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 7.303395884997824,
+            "light_yield": 1.0262826625013985,
+            "constraint_violations": 119,
+            "settling_time_min": 35.2,
+            "mv_activity_kmol_per_min": 0.2705169363170885,
+            "iae_mole_fraction_min": 0.41415885443454875
+          },
+          "zF_step_+10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.010637581930322,
+            "light_yield": 0.9754072473983535,
+            "constraint_violations": 1201,
+            "settling_time_min": 7.15,
+            "mv_activity_kmol_per_min": 0.05425707276219427,
+            "iae_mole_fraction_min": 0.09433263514358142
+          },
+          "zF_step_-10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.885055407213994,
+            "light_yield": 1.007634546730808,
+            "constraint_violations": 1201,
+            "settling_time_min": 7.0,
+            "mv_activity_kmol_per_min": 0.05615377325337656,
+            "iae_mole_fraction_min": 0.09287431649212266
+          },
+          "yD_setpoint_+0p5pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.711733495998425,
+            "light_yield": 0.9642407156649614,
+            "constraint_violations": 1201,
+            "settling_time_min": 15.05,
+            "mv_activity_kmol_per_min": 0.2281747256998803,
+            "iae_mole_fraction_min": 0.28341036778192563
+          }
+        },
+        "aggregate_iae": 1.5695779734399347,
+        "any_failure": false
+      }
+    },
+    {
+      "name": "SIMC_2DoF_no_decoupler",
+      "tuning_method": "SIMC-2DoF",
+      "Kp_top": 18.464718217602385,
+      "Ti_top_min": 48.0,
+      "Kp_bottom": 14.718114913318061,
+      "Ti_bottom_min": 48.0,
+      "decoupler": {
+        "matrix": [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ],
+        "rga_11": 1.0,
+        "g_effective_diag": [
+          null,
+          null
+        ]
+      },
+      "setpoint_filter_tau_min": 12.0,
+      "reference": "Skogestad 2003 SIMC, 2-DoF with setpoint filter",
+      "results": {
+        "per_scenario": {
+          "F_step_+20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 5.826868468187581,
+            "light_yield": 0.967483449618965,
+            "constraint_violations": 1201,
+            "settling_time_min": 46.050000000000004,
+            "mv_activity_kmol_per_min": 0.44817299320128967,
+            "iae_mole_fraction_min": 0.6848017995877564
+          },
+          "F_step_-20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 7.303395884997824,
+            "light_yield": 1.0262826625013985,
+            "constraint_violations": 119,
+            "settling_time_min": 35.2,
+            "mv_activity_kmol_per_min": 0.2705169363170885,
+            "iae_mole_fraction_min": 0.41415885443454875
+          },
+          "zF_step_+10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.010637581930322,
+            "light_yield": 0.9754072473983535,
+            "constraint_violations": 1201,
+            "settling_time_min": 7.15,
+            "mv_activity_kmol_per_min": 0.05425707276219427,
+            "iae_mole_fraction_min": 0.09433263514358142
+          },
+          "zF_step_-10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.885055407213994,
+            "light_yield": 1.007634546730808,
+            "constraint_violations": 1201,
+            "settling_time_min": 7.0,
+            "mv_activity_kmol_per_min": 0.05615377325337656,
+            "iae_mole_fraction_min": 0.09287431649212266
+          },
+          "yD_setpoint_+0p5pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.665036508967316,
+            "light_yield": 0.9656449940763069,
+            "constraint_violations": 1201,
+            "settling_time_min": 29.65,
+            "mv_activity_kmol_per_min": 0.15654021328520784,
+            "iae_mole_fraction_min": 0.2794711999874471
+          }
+        },
+        "aggregate_iae": 1.5656388056454562,
+        "any_failure": false
+      }
+    },
+    {
+      "name": "TL_with_decoupler",
+      "tuning_method": "Tyreus-Luyben",
+      "Kp_top": 38.33521973114844,
+      "Ti_top_min": 23.995364264747955,
+      "Kp_bottom": 37.94544564407735,
+      "Ti_bottom_min": 11.852898953445981,
+      "decoupler": {
+        "matrix": [
+          [
+            1.0,
+            0.9844101460363412
+          ],
+          [
+            0.9875734219490951,
+            1.0
+          ]
+        ],
+        "rga_11": 35.94187030779878,
+        "g_effective_diag": [
+          0.024356090972016856,
+          -0.03055611124992863
+        ]
+      },
+      "setpoint_filter_tau_min": null,
+      "reference": "Tyreus-Luyben gains + simplified static decoupler (Skogestad & Postlethwaite 1996 \u00a710.8)",
+      "results": {
+        "per_scenario": {
+          "F_step_+20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 7.5216483555673594,
+            "light_yield": 0.8686240622989624,
+            "constraint_violations": 1201,
+            "settling_time_min": 46.45,
+            "mv_activity_kmol_per_min": 2.701298652859751,
+            "iae_mole_fraction_min": 0.7117269608934773
+          },
+          "F_step_-20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.617278408189771,
+            "light_yield": 1.1502123258557941,
+            "constraint_violations": 1182,
+            "settling_time_min": Infinity,
+            "mv_activity_kmol_per_min": 3.2470158282671275,
+            "iae_mole_fraction_min": 1.1128182056509761
+          },
+          "zF_step_+10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.613584403691478,
+            "light_yield": 0.9227373967683872,
+            "constraint_violations": 1201,
+            "settling_time_min": 46.400000000000006,
+            "mv_activity_kmol_per_min": 0.7726985783534359,
+            "iae_mole_fraction_min": 0.36730019419016924
+          },
+          "zF_step_-10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.532408313325346,
+            "light_yield": 1.0657100571798608,
+            "constraint_violations": 1201,
+            "settling_time_min": Infinity,
+            "mv_activity_kmol_per_min": 0.3532453754320666,
+            "iae_mole_fraction_min": 0.49270149033712934
+          },
+          "yD_setpoint_+0p5pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.735521398231264,
+            "light_yield": 0.9788776141209994,
+            "constraint_violations": 101,
+            "settling_time_min": 39.1,
+            "mv_activity_kmol_per_min": 0.5794225446621213,
+            "iae_mole_fraction_min": 0.27604014144262895
+          }
+        },
+        "aggregate_iae": 2.9605869925143806,
+        "any_failure": false
+      }
+    },
+    {
+      "name": "SIMC_1DoF_with_decoupler",
+      "tuning_method": "SIMC-1DoF",
+      "Kp_top": 663.6565074471142,
+      "Ti_top_min": 48.0,
+      "Kp_bottom": 528.996577389757,
+      "Ti_bottom_min": 48.0,
+      "decoupler": {
+        "matrix": [
+          [
+            1.0,
+            0.9844101460363412
+          ],
+          [
+            0.9875734219490951,
+            1.0
+          ]
+        ],
+        "rga_11": 35.94187030779878,
+        "g_effective_diag": [
+          0.024356090972016856,
+          -0.03055611124992863
+        ]
+      },
+      "setpoint_filter_tau_min": null,
+      "reference": "SIMC-1DoF re-tuned against g_eff = g_ii / lambda_ii + simplified decoupler",
+      "results": {
+        "per_scenario": {
+          "F_step_+20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.831539580925456,
+            "light_yield": 0.9354334009337992,
+            "constraint_violations": 1201,
+            "settling_time_min": 45.150000000000006,
+            "mv_activity_kmol_per_min": 1.7193590643579348,
+            "iae_mole_fraction_min": 0.3139912598067297
+          },
+          "F_step_-20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.740218802015017,
+            "light_yield": 1.0625397650315354,
+            "constraint_violations": 1184,
+            "settling_time_min": 45.300000000000004,
+            "mv_activity_kmol_per_min": 2.67664335567702,
+            "iae_mole_fraction_min": 0.4170460932029867
+          },
+          "zF_step_+10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.1149615376489175,
+            "light_yield": 0.9682794563406874,
+            "constraint_violations": 1201,
+            "settling_time_min": 15.3,
+            "mv_activity_kmol_per_min": 0.16811992955673905,
+            "iae_mole_fraction_min": 0.16780393281084932
+          },
+          "zF_step_-10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.843537299952884,
+            "light_yield": 1.0147484312634834,
+            "constraint_violations": 1201,
+            "settling_time_min": 13.75,
+            "mv_activity_kmol_per_min": 0.1630416021147032,
+            "iae_mole_fraction_min": 0.16985635835762475
+          },
+          "yD_setpoint_+0p5pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 7.368919199486381,
+            "light_yield": 0.9490466488549442,
+            "constraint_violations": 683,
+            "settling_time_min": 29.050000000000004,
+            "mv_activity_kmol_per_min": 12.742847792835114,
+            "iae_mole_fraction_min": 0.10891029097920484
+          }
+        },
+        "aggregate_iae": 1.1776079351573951,
+        "any_failure": false
+      }
+    },
+    {
+      "name": "SIMC_2DoF_with_decoupler",
+      "tuning_method": "SIMC-2DoF",
+      "Kp_top": 663.6565074471142,
+      "Ti_top_min": 48.0,
+      "Kp_bottom": 528.996577389757,
+      "Ti_bottom_min": 48.0,
+      "decoupler": {
+        "matrix": [
+          [
+            1.0,
+            0.9844101460363412
+          ],
+          [
+            0.9875734219490951,
+            1.0
+          ]
+        ],
+        "rga_11": 35.94187030779878,
+        "g_effective_diag": [
+          0.024356090972016856,
+          -0.03055611124992863
+        ]
+      },
+      "setpoint_filter_tau_min": 12.0,
+      "reference": "SIMC-2DoF re-tuned against g_eff + simplified decoupler + setpoint filter",
+      "results": {
+        "per_scenario": {
+          "F_step_+20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.831539580925456,
+            "light_yield": 0.9354334009337992,
+            "constraint_violations": 1201,
+            "settling_time_min": 45.150000000000006,
+            "mv_activity_kmol_per_min": 1.7193590643579348,
+            "iae_mole_fraction_min": 0.3139912598067297
+          },
+          "F_step_-20pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.740218802015017,
+            "light_yield": 1.0625397650315354,
+            "constraint_violations": 1184,
+            "settling_time_min": 45.300000000000004,
+            "mv_activity_kmol_per_min": 2.67664335567702,
+            "iae_mole_fraction_min": 0.4170460932029867
+          },
+          "zF_step_+10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.1149615376489175,
+            "light_yield": 0.9682794563406874,
+            "constraint_violations": 1201,
+            "settling_time_min": 15.3,
+            "mv_activity_kmol_per_min": 0.16811992955673905,
+            "iae_mole_fraction_min": 0.16780393281084932
+          },
+          "zF_step_-10pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 6.843537299952884,
+            "light_yield": 1.0147484312634834,
+            "constraint_violations": 1201,
+            "settling_time_min": 13.75,
+            "mv_activity_kmol_per_min": 0.1630416021147032,
+            "iae_mole_fraction_min": 0.16985635835762475
+          },
+          "yD_setpoint_+0p5pct": {
+            "success": true,
+            "specific_energy_kmol_per_kmol": 7.149323578999412,
+            "light_yield": 0.9531941937087389,
+            "constraint_violations": 349,
+            "settling_time_min": 39.650000000000006,
+            "mv_activity_kmol_per_min": 0.6806458718923403,
+            "iae_mole_fraction_min": 0.14438761124432897
+          }
+        },
+        "aggregate_iae": 1.2130852554225193,
+        "any_failure": false
+      }
+    }
+  ],
+  "robustness": {
+    "nominal": {
+      "F_kmol_per_min": 1.0,
+      "zF": 0.5,
+      "skipped": false,
+      "aggregate_iae": 0.8362269141725175,
+      "per_scenario": {
+        "F_step_+20pct": {
+          "success": true,
+          "specific_energy_kmol_per_kmol": 6.040369460253845,
+          "light_yield": 0.9759660049142133,
+          "constraint_violations": 1201,
+          "settling_time_min": 45.150000000000006,
+          "mv_activity_kmol_per_min": 0.9191249655214144,
+          "iae_mole_fraction_min": 0.33115427978893275
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "specific_energy_kmol_per_kmol": 7.0241411078998235,
+          "light_yield": 1.006060584476521,
+          "constraint_violations": 117,
+          "settling_time_min": 40.550000000000004,
+          "mv_activity_kmol_per_min": 0.8786825947362322,
+          "iae_mole_fraction_min": 0.3037787718521129
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "specific_energy_kmol_per_kmol": 5.996796217591855,
+          "light_yield": 0.9798450211673937,
+          "constraint_violations": 1201,
+          "settling_time_min": 0.0,
+          "mv_activity_kmol_per_min": 0.05684392150310247,
+          "iae_mole_fraction_min": 0.018017112466724848
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "specific_energy_kmol_per_kmol": 6.897051534984602,
+          "light_yield": 1.002452943917119,
+          "constraint_violations": 940,
+          "settling_time_min": 0.0,
+          "mv_activity_kmol_per_min": 0.06171319811630438,
+          "iae_mole_fraction_min": 0.017931280693967704
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "specific_energy_kmol_per_kmol": 6.904007186615723,
+          "light_yield": 0.9632000330909116,
+          "constraint_violations": 1201,
+          "settling_time_min": 28.450000000000003,
+          "mv_activity_kmol_per_min": 0.5443304334927976,
+          "iae_mole_fraction_min": 0.16534546937077932
+        }
+      }
+    },
+    "F-20pct": {
+      "F_kmol_per_min": 0.8,
+      "zF": 0.5,
+      "skipped": true,
+      "reason": "Newton-Krylov of LV-closed residual + integration fallback both produce NaN at F=0.8 on the high-RGA LV plant. Deferred to Phase 5."
+    },
+    "F+20pct": {
+      "F_kmol_per_min": 1.2,
+      "zF": 0.5,
+      "skipped": true,
+      "reason": "Same numerical conditioning issue as F-20pct. Deferred to Phase 5."
+    }
+  }
+}

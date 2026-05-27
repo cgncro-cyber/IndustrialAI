@@ -42,6 +42,7 @@ __all__ = [
     "GridSpec",
     "build_grid",
     "default_lv_grid_spec",
+    "solve_lv_closed_steady_state",
     "sweep_operating_window",
 ]
 
@@ -137,7 +138,7 @@ def build_grid(
         yield GridPoint(LT=LT_ratio * L0, VB=VB_ratio * V0, F=F, zF=zF, qF=qF)
 
 
-def _solve_lv_closed_steady_state(
+def solve_lv_closed_steady_state(
     *,
     point: GridPoint,
     X0: StateVector,
@@ -258,7 +259,7 @@ def sweep_operating_window(
     rows: list[dict[str, float | bool]] = []
     X_guess = X_init.copy()
     for point in build_grid(spec, parameters):
-        X_star, residual_norm, success = _solve_lv_closed_steady_state(
+        X_star, residual_norm, success = solve_lv_closed_steady_state(
             point=point,
             X0=X_guess,
             parameters=parameters,

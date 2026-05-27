@@ -223,6 +223,8 @@ def simulate_lv_closed_loop(
     pid_bottom: PIDController | None = None,
     setpoint_interface: SetpointInterface | None = None,
     lv_config: LVConfiguration | None = None,
+    mv_decoupler: npt.NDArray[np.float64] | None = None,
+    setpoint_filter_tau_min: float | None = None,
     logger: RunLogger | None = None,
     record_tray_profile_every_n_ticks: int = 20,
     config_snapshot: dict[str, Any] | None = None,
@@ -251,6 +253,18 @@ def simulate_lv_closed_loop(
         :func:`build_default_setpoint_interface`.
     lv_config : LVConfiguration, optional
         Level-loop tuning. Defaults to the cola_lv.m values.
+    mv_decoupler : numpy.ndarray of shape (2, 2), optional
+        Static decoupler applied to PID-output *deviations* from the
+        operating-point bias ``(LT_initial, VB_initial)``. Specifically,
+        ``[LT, VB]_actual = bias + mv_decoupler @ ([LT, VB]_pid - bias)``.
+        Default ``None`` is equivalent to the identity (no decoupling).
+        Build via
+        :func:`industrial_ai.control.decoupler.simplified_decoupler`.
+    setpoint_filter_tau_min : float, optional
+        First-order filter applied to the *applied* (rate-limited)
+        composition setpoints before they reach the PIDs. Enables
+        SIMC-2DoF tuning where regulation and tracking bandwidths are
+        decoupled. Default ``None`` skips the filter.
     logger : RunLogger, optional
         If supplied, the simulator records the full data-logging
         contract incrementally and the caller is expected to call
@@ -289,6 +303,20 @@ def simulate_lv_closed_loop(
     if lv_config is None:
         lv_config = LVConfiguration()
 
+    if mv_decoupler is None:
+        mv_decoupler_matrix = np.eye(2, dtype=np.float64)
+    else:
+        if mv_decoupler.shape != (2, 2):
+            raise ValueError(f"mv_decoupler must be (2, 2); got shape {mv_decoupler.shape}")
+        mv_decoupler_matrix = np.asarray(mv_decoupler, dtype=np.float64)
+
+    if setpoint_filter_tau_min is not None and setpoint_filter_tau_min <= 0.0:
+        raise ValueError(
+            f"setpoint_filter_tau_min must be > 0 if set; got {setpoint_filter_tau_min}"
+        )
+    filtered_y_D_sp = initial_step.y_D_setpoint
+    filtered_x_B_sp = initial_step.x_B_setpoint
+
     if logger is not None and config_snapshot is not None:
         logger.set_config(config_snapshot)
 
@@ -314,10 +342,32 @@ def simulate_lv_closed_loop(
             dt=tick_dt_min,
         )
 
+        # SIMC-2DoF setpoint filter (first-order lag, discrete IIR).
+        # Applied between the slew-limited applied setpoint and the PID
+        # input. Skipped when setpoint_filter_tau_min is None.
+        if setpoint_filter_tau_min is not None:
+            alpha = tick_dt_min / (setpoint_filter_tau_min + tick_dt_min)
+            filtered_y_D_sp = filtered_y_D_sp + alpha * (applied["y_D"] - filtered_y_D_sp)
+            filtered_x_B_sp = filtered_x_B_sp + alpha * (applied["x_B"] - filtered_x_B_sp)
+            pid_setpoint_y_D = filtered_y_D_sp
+            pid_setpoint_x_B = filtered_x_B_sp
+        else:
+            pid_setpoint_y_D = applied["y_D"]
+            pid_setpoint_x_B = applied["x_B"]
+
         y_D_meas = float(X_current[NT - 1])
         x_B_meas = float(X_current[0])
-        LT = pid_top.step(measurement=y_D_meas, setpoint=applied["y_D"], dt=tick_dt_min)
-        VB = pid_bottom.step(measurement=x_B_meas, setpoint=applied["x_B"], dt=tick_dt_min)
+        LT_pid = pid_top.step(measurement=y_D_meas, setpoint=pid_setpoint_y_D, dt=tick_dt_min)
+        VB_pid = pid_bottom.step(measurement=x_B_meas, setpoint=pid_setpoint_x_B, dt=tick_dt_min)
+
+        # Static decoupler in deviation form: the PID outputs are
+        # interpreted as desired (LT, VB) commands; the decoupler
+        # maps their deviation from the operating-point bias into the
+        # actual MVs. With mv_decoupler = I this is a no-op.
+        pid_dev = np.array([LT_pid - LT_initial, VB_pid - VB_initial], dtype=np.float64)
+        actual_dev = mv_decoupler_matrix @ pid_dev
+        LT = LT_initial + float(actual_dev[0])
+        VB = VB_initial + float(actual_dev[1])
 
         U = assemble_inputs_lv(
             state=X_current,
@@ -343,7 +393,21 @@ def simulate_lv_closed_loop(
             t_axis[k + 1 :] = t_next
             X_axis[k + 1 :] = X_current  # carry forward
             break
-        X_current = result.X[-1]
+        X_next = result.X[-1]
+        # Catastrophic-divergence guard: an aggressive controller with
+        # bad gains can drive a holdup to zero, after which column_a_rhs
+        # divides by zero and produces NaN/Inf. SciPy reports success
+        # in that case, so check explicitly.
+        if not np.all(np.isfinite(X_next)):
+            success = False
+            message = (
+                f"state diverged to NaN/Inf at tick {k} (t={t_k:.3f}) — "
+                "controller likely too aggressive"
+            )
+            t_axis[k + 1 :] = t_next
+            X_axis[k + 1 :] = X_current
+            break
+        X_current = X_next
         wall_clock[k] = time.perf_counter() - wall_start
 
         t_axis[k + 1] = t_next

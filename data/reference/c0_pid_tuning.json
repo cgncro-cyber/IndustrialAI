@@ -1,51 +1,56 @@
 {
   "schema_version": 1,
-  "generated_at_utc": "2026-05-27T10:14:25.993803+00:00",
+  "generated_at_utc": "2026-05-27T14:37:09.442134+00:00",
   "operating_point": {
     "case": "Skogestad Column A, nominal SS",
     "F_kmol_per_min": 1.0,
     "zF": 0.5,
     "qF": 1.0,
     "L0_kmol_per_min": 2.70629,
-    "V0_kmol_per_min": 3.20629,
-    "y_D_at_SS": 0.9899999596076223,
-    "x_B_at_SS": 0.010000040392367918
+    "V0_kmol_per_min": 3.20629
   },
-  "relay_settings": {
-    "amplitude_d_kmol_per_min": 0.5,
-    "hysteresis": 0.005,
-    "duration_min": 500.0,
-    "method": "Astrom-Hagglund 1984",
-    "tuning_rule": "Tyreus-Luyben (Kp = Ku/3.2, Ti = 2.2 Pu)"
+  "winner": {
+    "variant_name": "TL_no_decoupler",
+    "tuning_method": "Tyreus-Luyben",
+    "aggregate_iae": 0.8362269141725175,
+    "reference": "Tyreus & Luyben 1992; relay test per Astrom-Hagglund 1984"
   },
   "loops": {
     "top": {
       "measurement": "y_D",
       "manipulated": "LT",
-      "Ku": 121.69113476278805,
-      "Pu_min": 10.903125290566626,
-      "relay_amplitude_d_kmol_per_min": 0.5,
-      "measurement_amplitude_a": 0.005231439197346144,
-      "setpoint": 0.9899999596076223,
       "tyreus_luyben": {
-        "Kp": 38.02847961337127,
-        "Ti_min": 23.98687563924658,
-        "Ki_per_min": 1.5853869501516176
+        "Kp": 38.33521973114844,
+        "Ti_min": 23.995364264747955,
+        "Ki_per_min": 1.59760940939194
       }
     },
     "bottom": {
       "measurement": "x_B",
       "manipulated": "VB",
-      "Ku": 120.49019452660984,
-      "Pu_min": 5.394932130051434,
-      "relay_amplitude_d_kmol_per_min": 0.5,
-      "measurement_amplitude_a": 0.005283581579968203,
-      "setpoint": 0.010000040392367918,
       "tyreus_luyben": {
-        "Kp": 37.653185789565576,
-        "Ti_min": 11.868850686113156,
-        "Ki_per_min": 3.1724373981400507
+        "Kp": 37.94544564407735,
+        "Ti_min": 11.852898953445981,
+        "Ki_per_min": 3.201364138268091
       }
     }
-  }
+  },
+  "decoupler": {
+    "matrix": [
+      [
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0
+      ]
+    ],
+    "rga_11": 1.0,
+    "g_effective_diag": [
+      null,
+      null
+    ]
+  },
+  "setpoint_filter_tau_min": null
 }
