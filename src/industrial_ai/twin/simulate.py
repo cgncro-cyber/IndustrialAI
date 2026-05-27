@@ -228,6 +228,7 @@ def simulate_lv_closed_loop(
     logger: RunLogger | None = None,
     record_tray_profile_every_n_ticks: int = 20,
     config_snapshot: dict[str, Any] | None = None,
+    max_wall_clock_seconds: float | None = None,
 ) -> SimulationResult:
     """Run an LV closed-loop disturbance scenario end-to-end.
 
@@ -275,6 +276,13 @@ def simulate_lv_closed_loop(
         tick rate) keeps the parquet file small.
     config_snapshot : dict, optional
         Forwarded to ``logger.set_config`` for the YAML snapshot.
+    max_wall_clock_seconds : float, optional
+        Hard wall-clock cap for the whole simulation. Checked at the
+        top of each regulatory tick — if exceeded, the run terminates
+        with ``success=False`` and ``message`` flagging the timeout.
+        Default ``None`` disables the cap. Used by the off-nominal C0
+        robustness sweep to bound pathological stiff-regime sims that
+        scipy cannot abort internally.
 
     Returns
     -------
@@ -331,10 +339,20 @@ def simulate_lv_closed_loop(
     X_current = X0.copy()
     success = True
     message = "ok"
+    sim_start = time.perf_counter()
     for k in range(n_ticks):
         t_k = k * tick_dt_min
         t_next = min((k + 1) * tick_dt_min, duration_min)
         wall_start = time.perf_counter()
+        if max_wall_clock_seconds is not None and (wall_start - sim_start) > max_wall_clock_seconds:
+            success = False
+            message = (
+                f"wall-clock cap {max_wall_clock_seconds:.1f}s exceeded at tick {k} "
+                f"(t={t_k:.3f}); aborting"
+            )
+            t_axis[k + 1 :] = t_next
+            X_axis[k + 1 :] = X_current
+            break
         step = scenario(t_k)
 
         applied = setpoint_interface.apply(

@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-05-27T23:12:39.521283+00:00",
+  "git_sha": "b1541c735c3e6f83c0fe19081a116881c26b232b",
+  "grid": {
+    "F_axis": [
+      0.8,
+      0.9,
+      1.1,
+      1.2
+    ],
+    "zF_axis": [
+      0.45,
+      0.475,
+      0.525,
+      0.55
+    ],
+    "n_ops": 16,
+    "source": "docs/kpis.md \u00a72.2"
+  },
+  "c0_config": {
+    "tuning": "TL_no_decoupler (shootout winner, c0_pid_tuning.json)",
+    "retune_per_op": false,
+    "per_scenario_wall_clock_cap_s": 30.0,
+    "rationale": "Fixed-gain TL non-extrapolation is the documented C0 locality limitation (pre_submission_checklist.md \u00a74.4); the wall-clock cap bounds pathological stiff-regime sims that the simulator cannot abort internally."
+  },
+  "scenario_set": "industrial_ai.control.off_nominal_scenarios \u2014 same relative magnitudes from each OP",
+  "aggregate": {
+    "mean": 3.0587491746096864,
+    "p50": 3.19458060539374,
+    "p95": 4.065113389859292,
+    "max": 4.230893734579517,
+    "min": 1.6751241255101128,
+    "ops_finite": 13,
+    "ops_total": 16,
+    "total_scenario_infeasibilities": 15,
+    "total_scenario_cells": 80
+  },
+  "per_op": [
+    {
+      "F": 0.8,
+      "zF": 0.45,
+      "lv_closed_ss": {
+        "y_D": 0.7197222010287369,
+        "x_B": 0.0004629982854402283
+      },
+      "aggregate_iae": null,
+      "aggregate_iae_finite": false,
+      "infeasibility_count": 5,
+      "max_cycle_wall_clock_seconds": 0.03887304099043831,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": false,
+          "timed_out": false,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "F_step_-20pct": {
+          "success": false,
+          "timed_out": false,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "zF_step_+10pct": {
+          "success": false,
+          "timed_out": false,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "zF_step_-10pct": {
+          "success": false,
+          "timed_out": false,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": false,
+          "timed_out": false,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        }
+      }
+    },
+    {
+      "F": 0.8,
+      "zF": 0.475,
+      "lv_closed_ss": {
+        "y_D": 0.7596898242926626,
+        "x_B": 0.00051695951223156
+      },
+      "aggregate_iae": null,
+      "aggregate_iae_finite": false,
+      "infeasibility_count": 5,
+      "max_cycle_wall_clock_seconds": 0.0,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": false,
+          "timed_out": true,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "F_step_-20pct": {
+          "success": false,
+          "timed_out": true,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "zF_step_+10pct": {
+          "success": false,
+          "timed_out": true,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "zF_step_-10pct": {
+          "success": false,
+          "timed_out": true,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": false,
+          "timed_out": true,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        }
+      }
+    },
+    {
+      "F": 0.8,
+      "zF": 0.525,
+      "lv_closed_ss": {
+        "y_D": 0.8396087247796101,
+        "x_B": 0.0006521253672988118
+      },
+      "aggregate_iae": 4.230893734579517,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.012766166008077562,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.508524540924089,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 1.2995719641988819,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8819536598656031,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8893937133412397,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.6514498562497035,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.8,
+      "zF": 0.55,
+      "lv_closed_ss": {
+        "y_D": 0.8795546164049846,
+        "x_B": 0.0007423059916933618
+      },
+      "aggregate_iae": 3.9545931600458086,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.0013374580012168735,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.45628010411002007,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 1.2432626654694627,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.828138240788302,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8287356728248925,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5981764768531309,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.45,
+      "lv_closed_ss": {
+        "y_D": 0.8091803354532466,
+        "x_B": 0.0010245806839836017
+      },
+      "aggregate_iae": null,
+      "aggregate_iae_finite": false,
+      "infeasibility_count": 5,
+      "max_cycle_wall_clock_seconds": 0.0,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": false,
+          "timed_out": true,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "F_step_-20pct": {
+          "success": false,
+          "timed_out": true,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "zF_step_+10pct": {
+          "success": false,
+          "timed_out": true,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "zF_step_-10pct": {
+          "success": false,
+          "timed_out": true,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": false,
+          "timed_out": true,
+          "iae_mole_fraction_min": null,
+          "iae_finite": false
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.475,
+      "lv_closed_ss": {
+        "y_D": 0.8540519879282011,
+        "x_B": 0.0011850150897581109
+      },
+      "aggregate_iae": 3.19458060539374,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.0014127499889582396,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.30072168111888053,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 1.1092464405277374,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.6533892191539407,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.6696355726266068,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.4615876919665747,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.525,
+      "lv_closed_ss": {
+        "y_D": 0.9436003158219951,
+        "x_B": 0.0017496052225393574
+      },
+      "aggregate_iae": 2.359729790087999,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.0012785420112777501,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.25760387107605487,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.9129435594549706,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.4578618683259027,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.4570165893292713,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.27430390190179976,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.55,
+      "lv_closed_ss": {
+        "y_D": 0.9870987718794966,
+        "x_B": 0.0036265351662915736
+      },
+      "aggregate_iae": 1.6751241255101128,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.0009296249772887677,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.2909452289871459,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.75276248831445,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.27075874704435116,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.27362200946613874,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.08703565169802714,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.45,
+      "lv_closed_ss": {
+        "y_D": 0.978046016146534,
+        "x_B": 0.009961541769597768
+      },
+      "aggregate_iae": 2.3450057774248245,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.0010758749849628657,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8324242082932256,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.4637655608122314,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.26710664438308407,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.23045141543593523,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5512579485003479,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.475,
+      "lv_closed_ss": {
+        "y_D": 0.9924191473470481,
+        "x_B": 0.04381736393680986
+      },
+      "aggregate_iae": 2.424583649914317,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.0009695419867057353,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8427278700961975,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.4979448390482004,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.27208199669039806,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.24540107881514084,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5664278652643802,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.525,
+      "lv_closed_ss": {
+        "y_D": 0.9954732222594839,
+        "x_B": 0.1329389816086266
+      },
+      "aggregate_iae": 2.6057839543540675,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.001135416008764878,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8541805092309797,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5951465228041926,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.2743696043251229,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.2906445577247382,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.591442760269034,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.55,
+      "lv_closed_ss": {
+        "y_D": 0.9962024169716522,
+        "x_B": 0.17816466007829704
+      },
+      "aggregate_iae": 2.6433001433674534,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.001462250016629696,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8552832257848935,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.6130837494331458,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.27503662619174724,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.30108627593275195,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5988102660249147,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.45,
+      "lv_closed_ss": {
+        "y_D": 0.9903775171032793,
+        "x_B": 0.06401588468340286
+      },
+      "aggregate_iae": 3.460872477986287,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.0009766669827513397,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 1.145623354833774,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.46546276029293465,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5315461890735169,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.49211841572956516,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8261217580564961,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.475,
+      "lv_closed_ss": {
+        "y_D": 0.9928764335745688,
+        "x_B": 0.10508827829040483
+      },
+      "aggregate_iae": 3.540720693467874,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.001033333013765514,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 1.1551809817509686,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5033520168489042,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5354037715316239,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5049346603991259,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8418492629372514,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.525,
+      "lv_closed_ss": {
+        "y_D": 0.9952969247726997,
+        "x_B": 0.18907358916676983
+      },
+      "aggregate_iae": 3.6523523324940603,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.0014987920003477484,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 1.1747340352612994,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5276935959370556,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5444461995833794,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5321376743957684,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8733408273165573,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.55,
+      "lv_closed_ss": {
+        "y_D": 0.996036912403984,
+        "x_B": 0.23140228818980246
+      },
+      "aggregate_iae": 3.676198825299857,
+      "aggregate_iae_finite": true,
+      "infeasibility_count": 0,
+      "max_cycle_wall_clock_seconds": 0.0022894169960636646,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 1.1779792903538557,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5327529738654526,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.5426865398467682,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.540027126910159,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "timed_out": false,
+          "iae_mole_fraction_min": 0.8827528943236211,
+          "iae_finite": true
+        }
+      }
+    }
+  ]
+}

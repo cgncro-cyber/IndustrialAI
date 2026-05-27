@@ -1,0 +1,703 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-05-27T21:21:42.015503+00:00",
+  "git_sha": "b1541c735c3e6f83c0fe19081a116881c26b232b",
+  "grid": {
+    "F_axis": [
+      0.8,
+      0.9,
+      1.1,
+      1.2
+    ],
+    "zF_axis": [
+      0.45,
+      0.475,
+      0.525,
+      0.55
+    ],
+    "n_ops": 16,
+    "source": "docs/kpis.md \u00a72.2"
+  },
+  "mpc_config": {
+    "sampling_time_min": 5.0,
+    "n_horizon": 20,
+    "q_top": 10000.0,
+    "q_bottom": 10000.0,
+    "r_lt": 0.1,
+    "r_vb": 0.1
+  },
+  "scenario_set": "industrial_ai.control.off_nominal_scenarios \u2014 same relative magnitudes from each OP",
+  "linearization": {
+    "A_nom_spectral_norm": 32.694099330926896,
+    "linearization_recompute_count": 16,
+    "linearization_consistency": 0.8259874425447431
+  },
+  "aggregate": {
+    "mean": 246.30072355045326,
+    "p50": 61.41491478341197,
+    "p95": 767.1427799822397,
+    "max": 769.9440450530863,
+    "min": 3.1387250246351712,
+    "ops_finite": 16,
+    "ops_total": 16,
+    "off_nominal_robustness_iae": 767.1427799822397
+  },
+  "per_op": [
+    {
+      "F": 0.8,
+      "zF": 0.45,
+      "lv_closed_ss": {
+        "y_D": 0.7197222010287369,
+        "x_B": 0.0004629982854402283
+      },
+      "linearization_drift_g": 5.6212740370281065,
+      "linearization_drift_rel": 0.17193543030900005,
+      "aggregate_iae": 769.9440450530863,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.9436077499995008,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 160.71918467491153,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 152.23001800226118,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 164.0737616171725,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 141.35429612284588,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 151.56678463589515,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.8,
+      "zF": 0.475,
+      "lv_closed_ss": {
+        "y_D": 0.7596898242926626,
+        "x_B": 0.00051695951223156
+      },
+      "linearization_drift_g": 5.261180421490404,
+      "linearization_drift_rel": 0.1609214056713165,
+      "aggregate_iae": 766.2090249586242,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.6144654999952763,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 158.89098516687446,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 151.8273988408098,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 162.3273254727042,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 140.75187124370714,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 152.4114442345288,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.8,
+      "zF": 0.525,
+      "lv_closed_ss": {
+        "y_D": 0.8396087247796101,
+        "x_B": 0.0006521253672988118
+      },
+      "linearization_drift_g": 4.4110775871414045,
+      "linearization_drift_rel": 0.13491968512399904,
+      "aggregate_iae": 748.26141121055,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.6119225410220679,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 149.9944027193316,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 148.98149420781624,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 161.1026720480445,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 137.84757153934757,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 150.33527069601024,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.8,
+      "zF": 0.55,
+      "lv_closed_ss": {
+        "y_D": 0.8795546164049846,
+        "x_B": 0.0007423059916933618
+      },
+      "linearization_drift_g": 3.8714725947462574,
+      "linearization_drift_rel": 0.11841502515666637,
+      "aggregate_iae": 737.5239197670859,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.5393701659922954,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 145.05133363254254,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 147.59686073461447,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 159.3936976410621,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 136.5028686641285,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 148.9791590947383,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.45,
+      "lv_closed_ss": {
+        "y_D": 0.8091803354532466,
+        "x_B": 0.0010245806839836017
+      },
+      "linearization_drift_g": 4.761465259341882,
+      "linearization_drift_rel": 0.14563683835259492,
+      "aggregate_iae": 380.9421040781125,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.5122868749895133,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 52.14158146486718,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 44.735927578970085,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 46.3285202638684,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 108.10081128339155,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 129.6352634870153,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.475,
+      "lv_closed_ss": {
+        "y_D": 0.8540519879282011,
+        "x_B": 0.0011850150897581109
+      },
+      "linearization_drift_g": 4.228562377681712,
+      "linearization_drift_rel": 0.129337172891064,
+      "aggregate_iae": 167.52345864840598,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.4586487920023501,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 33.01963051682638,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 31.01137403952676,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 30.820644708814836,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 38.49921043835771,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 34.172598944880285,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.525,
+      "lv_closed_ss": {
+        "y_D": 0.9436003158219951,
+        "x_B": 0.0017496052225393574
+      },
+      "linearization_drift_g": 2.6470448704791187,
+      "linearization_drift_rel": 0.08096399425737212,
+      "aggregate_iae": 56.45079522201705,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.48564408300444484,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 10.267136489563569,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 11.586199554768285,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 10.387492403741064,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 12.44548026071382,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 11.764486513230308,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.55,
+      "lv_closed_ss": {
+        "y_D": 0.9870987718794966,
+        "x_B": 0.0036265351662915736
+      },
+      "linearization_drift_g": 1.3976400377166585,
+      "linearization_drift_rel": 0.04274899955401324,
+      "aggregate_iae": 6.725285422547005,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.24029829099890776,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 1.1084635016219078,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 1.5437463188382434,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 1.1044948134694517,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 1.5247189856011576,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 1.4438618030162438,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.45,
+      "lv_closed_ss": {
+        "y_D": 0.978046016146534,
+        "x_B": 0.009961541769597768
+      },
+      "linearization_drift_g": 1.1408164541819654,
+      "linearization_drift_rel": 0.03489364984900542,
+      "aggregate_iae": 3.1387250246351712,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.2355057919921819,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.6195314548181794,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.48654391296279553,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.4526829161474349,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.5658417004998804,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 1.014125040206881,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.475,
+      "lv_closed_ss": {
+        "y_D": 0.9924191473470481,
+        "x_B": 0.04381736393680986
+      },
+      "linearization_drift_g": 2.563094658774796,
+      "linearization_drift_rel": 0.0783962461492323,
+      "aggregate_iae": 10.892985804824477,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.25386041699675843,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 2.229855504003036,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 2.071824866442072,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 2.2314087372986497,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 2.011392256665312,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 2.3485044404154065,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.525,
+      "lv_closed_ss": {
+        "y_D": 0.9954732222594839,
+        "x_B": 0.1329389816086266
+      },
+      "linearization_drift_g": 4.929011102117016,
+      "linearization_drift_rel": 0.15076148916738719,
+      "aggregate_iae": 45.524206379843925,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.29707858301117085,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 9.30990729158916,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 9.050270304791852,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 9.004776688333575,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 9.277667506797677,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 8.881584588331657,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.55,
+      "lv_closed_ss": {
+        "y_D": 0.9962024169716522,
+        "x_B": 0.17816466007829704
+      },
+      "linearization_drift_g": 5.566140959213091,
+      "linearization_drift_rel": 0.1702490991684183,
+      "aggregate_iae": 61.68860666136286,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.3435241249972023,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 12.712608570114055,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 12.252572002501468,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 12.039497258271075,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 12.858742595565,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 11.825186234911266,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.45,
+      "lv_closed_ss": {
+        "y_D": 0.9903775171032793,
+        "x_B": 0.06401588468340286
+      },
+      "linearization_drift_g": 3.000955244061752,
+      "linearization_drift_rel": 0.09178889479983339,
+      "aggregate_iae": 18.65050958333361,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.24186416700831614,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 3.9090530244813113,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 3.415131039783845,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 3.7668059199483572,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 3.514270258468509,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 4.045249340651586,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.475,
+      "lv_closed_ss": {
+        "y_D": 0.9928764335745688,
+        "x_B": 0.10508827829040483
+      },
+      "linearization_drift_g": 4.089019724807604,
+      "linearization_drift_rel": 0.12506904329796315,
+      "aggregate_iae": 33.51809244956688,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.3083887910179328,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 7.020382648142039,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 6.307200352695751,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 6.639354441606245,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 6.614898117491032,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 6.93625688963181,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.525,
+      "lv_closed_ss": {
+        "y_D": 0.9952969247726997,
+        "x_B": 0.18907358916676983
+      },
+      "linearization_drift_g": 5.4204235823158955,
+      "linearization_drift_rel": 0.16579210601432473,
+      "aggregate_iae": 61.14122290546108,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.33682695898460224,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 12.916972560253605,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 11.589068875829922,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 11.775418451421459,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 12.657805523912295,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 12.201957494043796,
+          "iae_finite": true
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.55,
+      "lv_closed_ss": {
+        "y_D": 0.996036912403984,
+        "x_B": 0.23140228818980246
+      },
+      "linearization_drift_g": 5.892913241998856,
+      "linearization_drift_rel": 0.1802439388940276,
+      "aggregate_iae": 72.67718363779572,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.4293929580016993,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 15.469787263838027,
+          "iae_finite": true
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 13.748558709802406,
+          "iae_finite": true
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 13.804098721827875,
+          "iae_finite": true
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 15.354429395178935,
+          "iae_finite": true
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 14.300309547148482,
+          "iae_finite": true
+        }
+      }
+    }
+  ]
+}
