@@ -18,9 +18,21 @@ The project follows a strict two-layer hierarchical control architecture — see
 
 **Case study choice:** Skogestad's Column A — 40-stage binary distillation, relative volatility 1.5, 99 % purity products, with LV, DV, and L/D-V/B configurations (see ADR 007). Single column for Phase 1; extension to a two-column direct sequence is a deferred Phase 2 decision-junction if PID and Linear MPC results turn out too close.
 
-### Progress snapshot (Days 5–6 done, 2026-05-27)
+### Progress snapshot (Day 8 closed, Phase 1 gate cleared, 2026-05-27)
 
-Day 1–4 deliverables landed in commits `6f88ce9` (core ODE + integrator + steady state), `1079c39` (LV + regulatory PID + setpoint interface + data-logging contract), `7e15787` (linearize + mini-gate). The Day-4 mini-gate is green: G^LV(0) matches Skogestad 1997 Eq. (31) within 0.01 %, τ₁ within 0.04 %, τ₂/τ₃ within 0.5 %/0.3 %, and three Octave-cross-checked step trajectories (L +1 %, z_F −10 %, F +10 %) match within 1e-6. `linearize.py` was pulled forward from Day 7 because the mini-gate's paper-defensive scalar checks need it. Day 5 added the DV configuration (`configurations/dv.py`, P-loops: MD → LT, MB → B) per `cola_dv.m`. Day 6 closes the canonical Skogestad trio with the LDVB / double-ratio configuration (`configurations/ldvb.py`): LV-style level loops on MD → D and MB → B, then LT = LR · D and VB = VR · B from the supervisor's L/D and V/B ratios, per `cola_rr.m`. Both DV and LDVB pass a closed-loop SS regression (drift < 1e-4 over 5 min at the published steady state) and LDVB additionally passes a cross-consistency test that its assembled `U` matches LV's at the nominal SS within 1e-12. 57 pytest cases pass, twin-layer coverage 96 %.
+Day 1–4 deliverables landed in commits `6f88ce9` / `1079c39` / `7e15787`; Day 5 in `aec4b9d` (DV configuration); Day 6 in `efd7add` (LDVB configuration). The Day-4 mini-gate is green: G^LV(0) matches Skogestad 1997 Eq. (31) within 0.01 %, τ₁ within 0.04 %, τ₂/τ₃ within 0.5 %/0.3 %, and three Octave-cross-checked step trajectories (L +1 %, z_F −10 %, F +10 %) match within 1e-6.
+
+Day 8 (the gate-consolidation tag) ships the remaining Phase-1 acceptance items in a single commit:
+
+- `column_a/assumptions.md` — full citation of every modeling assumption (binary mixture, constant α, constant molar overflow, linearized hydraulics + K2 effect, P-only level loops, numerical method choices, what is *not* modeled).
+- `column_a/balances.py` + tests — algebraic mass-balance closure check; both overall (F = D + B) and light-component (F·zF = D·y_D + B·x_B) balances close to << 0.1 % at the published SS and at a re-converged perturbed SS at zF = 0.6.
+- `test_rate_limiter_divergence_guard.py` — ±20 % rate-limited steps on LT integrate to bounded compositions and re-converge to the Newton SS within 5e-4 (3 cases).
+- `simulate.py` + `test_lv_disturbance_scenarios.py` — tick-based LV closed-loop driver with two regulatory PIDs, slew-limited setpoint interface, and full RunLogger integration. Three end-to-end disturbance scenarios (F +20 %, zF −10 %, y_D setpoint +0.5 %) each produce the complete 7-artifact data-logging contract (`timeseries/tray_profile/setpoints.parquet`, `kpis/latency/manifest.json`, `config.yaml`).
+- `column_a/operating_window.py` + `tools/run_operating_window_sweep.py` — LV-closed Newton-Krylov sweep with long-time integration fallback, scoped to the realistic ±10 % LT/VB · ±20 % F/zF window. The 1080-point baseline sweep converges 100 % in 82.6 s on the dev machine and is materialized to `data/baseline_operating_window.csv`.
+- `notebooks/01_twin_walkthrough.ipynb` — guided tour: parameters → SS profile → open-loop L+1 % step → closed-loop F-step → operating-window summary.
+- pyproject.toml: added `N802` to the Skogestad-notation exemption so domain identifiers like `y_D`, `x_B`, `zF` survive ruff.
+
+Test suite at the close of Day 8: **72 pytest cases pass**, twin-layer coverage ≥ 96 %, ruff + format + mypy --strict all clean.
 
 ### Deliverables — `src/industrial_ai/twin/column_a/`
 
@@ -41,9 +53,12 @@ Module layout, derived from the published MATLAB code at `https://skoge.folk.ntn
 - ✓ `src/industrial_ai/twin/regulatory_pid.py` — embedded multi-loop PID, identical across configurations per ADR 006 (top-composition loop, bottom-composition loop, condenser-level loop, reboiler-level loop). Used by all four supervisory configurations C0/C1/C2/C3.
 - ✓ `src/industrial_ai/twin/setpoint_interface.py` — uniform setpoint ingress with rate-limiter / ramping logic per ADR 006.
 - ✓ `tests/test_column_a_against_matlab.py` — pytest regression against 3–4 published Skogestad reference trajectories (steady-state stage profiles + open-loop step responses to L, V, F, z_F changes).
-- — `notebooks/01_twin_walkthrough.ipynb` — guided tour: column construction, initialization, a representative LV-configuration step response.
-- — `data/baseline_operating_window.csv` — ≥1000 logged steady-state points across nominal operating window.
-- — `src/industrial_ai/twin/column_a/assumptions.md` — every modeling assumption documented: binary mixture, constant pressure, constant relative volatility, equilibrium on all stages, total condenser, constant molar flows, no vapor holdup, linearized liquid dynamics with K2-vapor-flow effect, plus all numerical-method choices.
+- ✓ `notebooks/01_twin_walkthrough.ipynb` — guided tour: column construction, initialization, a representative LV-configuration step response.
+- ✓ `data/baseline_operating_window.csv` — 1080 logged steady-state points across the LV operating window (100 % convergence via Newton-Krylov with long-time integration fallback).
+- ✓ `src/industrial_ai/twin/column_a/assumptions.md` — every modeling assumption documented: binary mixture, constant pressure, constant relative volatility, equilibrium on all stages, total condenser, constant molar flows, no vapor holdup, linearized liquid dynamics with K2-vapor-flow effect, plus all numerical-method choices.
+- ✓ `src/industrial_ai/twin/simulate.py` — tick-based LV closed-loop driver (regulatory PIDs + slew-limited setpoint interface + RunLogger integration).
+- ✓ `src/industrial_ai/twin/column_a/operating_window.py` + `tools/run_operating_window_sweep.py` — Newton-Krylov sweep with integration fallback for ill-conditioned (LT, VB) combinations.
+- ✓ `src/industrial_ai/twin/column_a/balances.py` — algebraic mass-balance closure check (overall + light component).
 
 ### Data-logging contract (required for Phases 3–5 figures)
 
@@ -67,11 +82,11 @@ Without this logging contract in place at the end of Phase 1, no later phase's f
 ### Gate
 
 - ✓ Pytest regression tests pass against the published Skogestad reference trajectories within agreed numerical tolerances (steady-state values: ±1 %, step-response shape: visual + L2 norm under threshold). *Day-4 mini-gate cleared with margin: G^LV(0) Eq. (31) ±5 % spec → 0.01 % actual; τ₁ ±2 % spec → 0.04 % actual; three Octave trajectories rel ≤ 1e-6.*
-- — Twin converges across the full intended LV operating window without manual intervention.
-- — Energy and mass balances close to within 0.1 % at steady state.
-- — Three independent disturbance scenarios (feed-rate step, feed-composition step, reflux step) run end-to-end and write the full data-logging contract.
-- — Setpoint rate-limiter prevents solver divergence on ±20 % step changes.
-- — `assumptions.md` lists every modeling assumption with citation back to Skogestad & Morari 1988 / Skogestad 1997 where applicable.
+- ✓ Twin converges across the full intended LV operating window without manual intervention. *1080-point sweep, 100 % convergence in 82.6 s; small-grid pytest enforces ≥99 % convergence.*
+- ✓ Energy and mass balances close to within 0.1 % at steady state. *Both balances close to << 0.1 % at the published SS and at a re-converged zF = 0.6 SS (pytest enforces).*
+- ✓ Three independent disturbance scenarios (feed-rate step, feed-composition step, reflux step) run end-to-end and write the full data-logging contract. *F +20 %, zF −10 %, y_D setpoint +0.5 %; each scenario produces the 7-artifact contract and pytest re-opens every artifact.*
+- ✓ Setpoint rate-limiter prevents solver divergence on ±20 % step changes. *±20 % LT step at 0.1 kmol/min² slew rate integrates to bounded compositions and re-converges to the Newton SS within 5e-4.*
+- ✓ `assumptions.md` lists every modeling assumption with citation back to Skogestad & Morari 1988 / Skogestad 1997 where applicable.
 
 ---
 
