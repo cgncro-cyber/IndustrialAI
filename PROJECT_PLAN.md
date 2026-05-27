@@ -133,6 +133,14 @@ Without this logging contract in place at the end of Phase 1, no later phase's f
 
 **Goal:** LangGraph multi-agent system that proposes setpoint adjustments based on downsampled twin state, operating at the supervisory cadence defined in ADR 006.
 
+**Outcome buckets (defined before Phase 3 starts — do not pre-commit to a binary "agent must beat MPC" threshold; see `docs/pre_submission_checklist.md` §2.2).** Three buckets, each publishable, each with a pre-drafted Methods paragraph at Phase-3 kickoff:
+
+- **Bucket A** — agent dominates C1 (Linear MPC) in aggregate IAE across the disturbance scenario set.
+- **Bucket B** — agent ≈ C1 in aggregate, agent dominates at off-nominal OPs / regime changes / mode switches. Robustness, not raw performance, is the contribution.
+- **Bucket C** — agent ≈ C1 in aggregate, safety gate (Phase 4) catches MPC-feasible-but-plant-unsafe setpoints. The safety gate becomes the load-bearing contribution.
+
+The Phase-3 acceptance criterion is not "Bucket A reached"; it is "empirical results unambiguously map to exactly one bucket."
+
 **Architecture**
 - `Observer` — reads downsampled, aggregated twin state, summarizes deviations from spec.
 - `Optimizer` — proposes setpoint changes against KPI objectives.
@@ -143,11 +151,14 @@ Without this logging contract in place at the end of Phase 1, no later phase's f
 - `notebooks/03_agent_runs.ipynb` — illustrative trajectories.
 - Config-driven runs (YAML), all hyperparameters versioned.
 - Hard recursion / iteration limits in the LangGraph to prevent runaway loops.
+- One pre-drafted Methods paragraph per outcome bucket (A / B / C), committed before agent-prompt iteration begins. After empirical results, one is selected; the others are discarded.
+- KPI set extended beyond aggregate IAE to discriminate between outcome buckets: an off-nominal-robustness KPI (max IAE under F ± 20 %, zF ± 20 % relative to nominal) for Bucket B, and a constraint-violation-rate KPI for Bucket C (Phase 4 surface, defined here).
 
 **Gate**
 - Configuration C2 (Agent, no safety gate) runs end-to-end without manual intervention for ≥3 disturbance scenarios.
 - Output setpoints are within physical limits 100 % of the time (pre-safety-layer).
 - Average wall-clock time per supervisory cycle is at least 10× faster than the supervisory cadence (i.e., ≤30–90 s per decision for a 5–15 min cadence).
+- Empirical results map to exactly one outcome bucket; the corresponding Methods paragraph is locked in.
 
 ---
 
@@ -166,11 +177,13 @@ Without this logging contract in place at the end of Phase 1, no later phase's f
 - Detector(s) trained per the methodology above.
 - `notebooks/04_safety_layer.ipynb` — ROC curves, FP/FN analysis, cross-domain detection rates.
 - Documented operating-point justification.
+- **3–5 documented false-negative case studies (binding).** Per external review (May 2026), aggregate ROC curves are weak paper currency for safety contributions. For each case study: (a) the unsafe setpoint proposed by the agent, (b) the physical danger if executed (mass-balance, energy-balance, or constraint argument), (c) whether the safety gate caught it, (d) which detector signal triggered, and how close to the threshold. Each case study is a worked example in `notebooks/04_safety_layer.ipynb` and a numbered figure in the paper.
 
 **Gate**
 - Documented FP/FN trade-off at the chosen operating point.
 - Cross-domain transfer result reported (positive or negative) — both are publishable.
 - Configuration C3 (Agent + Safety Gate) blocks ≥1 demonstrably-bad agent proposal in a controlled disturbance scenario.
+- 3–5 false-negative case studies committed to `notebooks/04_safety_layer.ipynb` with the four required elements per case.
 
 ---
 
