@@ -18,9 +18,9 @@ The project follows a strict two-layer hierarchical control architecture — see
 
 **Case study choice:** Skogestad's Column A — 40-stage binary distillation, relative volatility 1.5, 99 % purity products, with LV, DV, and L/D-V/B configurations (see ADR 007). Single column for Phase 1; extension to a two-column direct sequence is a deferred Phase 2 decision-junction if PID and Linear MPC results turn out too close.
 
-### Progress snapshot (Day 4 mini-gate passed, 2026-05-26)
+### Progress snapshot (Day 5 done, 2026-05-27)
 
-Day 1–4 deliverables landed in commits `6f88ce9` (core ODE + integrator + steady state), `1079c39` (LV + regulatory PID + setpoint interface + data-logging contract), `7e15787` (linearize + mini-gate). The Day-4 mini-gate is green: G^LV(0) matches Skogestad 1997 Eq. (31) within 0.01 %, τ₁ within 0.04 %, τ₂/τ₃ within 0.5 %/0.3 %, and three Octave-cross-checked step trajectories (L +1 %, z_F −10 %, F +10 %) match within 1e-6. 45 pytest cases pass, twin-layer coverage 96 %. `linearize.py` was pulled forward from Day 7 because the mini-gate's paper-defensive scalar checks need it.
+Day 1–4 deliverables landed in commits `6f88ce9` (core ODE + integrator + steady state), `1079c39` (LV + regulatory PID + setpoint interface + data-logging contract), `7e15787` (linearize + mini-gate). The Day-4 mini-gate is green: G^LV(0) matches Skogestad 1997 Eq. (31) within 0.01 %, τ₁ within 0.04 %, τ₂/τ₃ within 0.5 %/0.3 %, and three Octave-cross-checked step trajectories (L +1 %, z_F −10 %, F +10 %) match within 1e-6. `linearize.py` was pulled forward from Day 7 because the mini-gate's paper-defensive scalar checks need it. Day 5 adds the DV configuration (`configurations/dv.py`, P-loops: MD → LT, MB → B, with the cola_dv.m gains and biases); closed-loop integration at the published SS drifts < 1e-4 over 5 min. 50 pytest cases pass, twin-layer coverage 96 %.
 
 ### Deliverables — `src/industrial_ai/twin/column_a/`
 
@@ -32,7 +32,7 @@ Module layout, derived from the published MATLAB code at `https://skoge.folk.ntn
 | ✓ | `column_a/integrator.py` | `cola4.m` | `scipy.integrate.solve_ivp` wrapper (LSODA or Radau for stiff initialization phase). |
 | ✓ | `column_a/steady_state.py` | `cola_init.m` | Newton–Krylov solver for steady-state initialization. |
 | ✓ | `column_a/configurations/lv.py` | `cola_lv.m` | LV configuration: P-controllers on D and B level loops. **Phase 1 primary.** |
-| — | `column_a/configurations/dv.py` | `cola_dv.m` | DV configuration. |
+| ✓ | `column_a/configurations/dv.py` | `cola_dv.m` | DV configuration: P-controllers on D and B level loops, MD→LT and MB→B. |
 | — | `column_a/configurations/ldvb.py` | `cola_rr.m` | L/D–V/B double-ratio configuration. |
 | ✓ | `column_a/linearize.py` | `cola_linearize.m` | Numerical Jacobian for Phase 2 Linear MPC (do-mpc). |
 

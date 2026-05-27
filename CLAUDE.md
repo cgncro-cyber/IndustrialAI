@@ -7,7 +7,7 @@
 **Name:** IndustrialAI — Safety-Gated Agentic Control for Coupled Multivariable Processes
 **Type:** Public research project (GitHub repo → arXiv preprint → conference paper)
 **Owner:** Christian Rosenthal
-**Status:** Phase 1 (foundation — Skogestad Column A dynamic twin, per ADR 007). Day-4 mini-gate passed: G^LV(0) and τ₁/τ₂/τ₃ all within ±5 % / ±2 % of Skogestad 1997 Eq. (31) and Section 4.4; three Octave-cross-checked step trajectories within 1e-6. Remaining Phase-1 scope: DV + L/D-V/B configurations (Days 5–6), operating-window sweep + balance closures + rate-limiter divergence guard + assumptions.md + walkthrough notebook (Day 8), optional CasADi symbolic-gradient layer (Days 9–10).
+**Status:** Phase 1 (foundation — Skogestad Column A dynamic twin, per ADR 007). Day-4 mini-gate passed: G^LV(0) and τ₁/τ₂/τ₃ all within ±5 % / ±2 % of Skogestad 1997 Eq. (31) and Section 4.4; three Octave-cross-checked step trajectories within 1e-6. Day 5 done: DV configuration shipped (closed-loop drift < 1e-4 over 5 min at the published SS, 50 pytest cases pass). Remaining Phase-1 scope: L/D-V/B configuration (Day 6), operating-window sweep + balance closures + rate-limiter divergence guard + assumptions.md + walkthrough notebook (Day 8), optional CasADi symbolic-gradient layer (Days 9–10).
 
 ## 2. Strategic Framing — Why This Project Exists
 
