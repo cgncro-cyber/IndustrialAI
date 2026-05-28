@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-05-28T08:25:40.921901+00:00",
+  "git_sha": "792577c6ab2fe9048982a6a482fdac459857ced0",
+  "purpose": "Pareto front of C1 fixed-weight regularization vs. nominal and off-nominal performance. Main-body artifact for the Phase-5 paper.",
+  "off_nominal_op_under_evaluation": {
+    "F": 0.8,
+    "zF": 0.45
+  },
+  "c0_reference": {
+    "name": "TL_no_decoupler (shootout winner)",
+    "nominal_aggregate_iae": 0.8362269141725175,
+    "per_scenario": {
+      "F_step_+20pct": 0.33115427978893275,
+      "F_step_-20pct": 0.3037787718521129,
+      "zF_step_+10pct": 0.018017112466724848,
+      "zF_step_-10pct": 0.017931280693967704,
+      "yD_setpoint_+0p5pct": 0.16534546937077932
+    }
+  },
+  "multipliers_swept": [
+    1.0,
+    10.0,
+    100.0,
+    1000.0
+  ],
+  "levels": [
+    {
+      "multiplier": 1.0,
+      "r_lt": 0.1,
+      "r_vb": 0.1,
+      "nominal": {
+        "aggregate_iae": 0.10894425307820106,
+        "gate_wins_out_of_5": 5,
+        "gate_passed": true,
+        "per_scenario": {
+          "F_step_+20pct": {
+            "c0_iae": 0.33115427978893275,
+            "c1_iae": 0.013022300038030735,
+            "c1_wins": true
+          },
+          "F_step_-20pct": {
+            "c0_iae": 0.3037787718521129,
+            "c1_iae": 0.01420222750784003,
+            "c1_wins": true
+          },
+          "zF_step_+10pct": {
+            "c0_iae": 0.018017112466724848,
+            "c1_iae": 0.0050291903875124624,
+            "c1_wins": true
+          },
+          "zF_step_-10pct": {
+            "c0_iae": 0.017931280693967704,
+            "c1_iae": 0.005534064103398097,
+            "c1_wins": true
+          },
+          "yD_setpoint_+0p5pct": {
+            "c0_iae": 0.16534546937077932,
+            "c1_iae": 0.07115647104141974,
+            "c1_wins": true
+          }
+        }
+      },
+      "off_nominal_worst_op": {
+        "F": 0.8,
+        "zF": 0.45,
+        "aggregate_iae": 776.3525304332213,
+        "F_step_+20pct_final_y_D": 0.6971337090588969,
+        "per_scenario": {
+          "F_step_+20pct": {
+            "iae": 160.71918467491153,
+            "success": true
+          },
+          "F_step_-20pct": {
+            "iae": 149.84875384476018,
+            "success": true
+          },
+          "zF_step_+10pct": {
+            "iae": 184.82757653215458,
+            "success": true
+          },
+          "zF_step_-10pct": {
+            "iae": 126.76162300895604,
+            "success": true
+          },
+          "yD_setpoint_+0p5pct": {
+            "iae": 154.19539237243896,
+            "success": true
+          }
+        }
+      }
+    },
+    {
+      "multiplier": 10.0,
+      "r_lt": 1.0,
+      "r_vb": 1.0,
+      "nominal": {
+        "aggregate_iae": 0.1581248057743628,
+        "gate_wins_out_of_5": 5,
+        "gate_passed": true,
+        "per_scenario": {
+          "F_step_+20pct": {
+            "c0_iae": 0.33115427978893275,
+            "c1_iae": 0.026746239691684826,
+            "c1_wins": true
+          },
+          "F_step_-20pct": {
+            "c0_iae": 0.3037787718521129,
+            "c1_iae": 0.02860943920532252,
+            "c1_wins": true
+          },
+          "zF_step_+10pct": {
+            "c0_iae": 0.018017112466724848,
+            "c1_iae": 0.00560647799884953,
+            "c1_wins": true
+          },
+          "zF_step_-10pct": {
+            "c0_iae": 0.017931280693967704,
+            "c1_iae": 0.006481906207608513,
+            "c1_wins": true
+          },
+          "yD_setpoint_+0p5pct": {
+            "c0_iae": 0.16534546937077932,
+            "c1_iae": 0.09068074267089742,
+            "c1_wins": true
+          }
+        }
+      },
+      "off_nominal_worst_op": {
+        "F": 0.8,
+        "zF": 0.45,
+        "aggregate_iae": 565.0741189472641,
+        "F_step_+20pct_final_y_D": 0.7815135061447104,
+        "per_scenario": {
+          "F_step_+20pct": {
+            "iae": 118.33310021465527,
+            "success": true
+          },
+          "F_step_-20pct": {
+            "iae": 108.41844709652628,
+            "success": true
+          },
+          "zF_step_+10pct": {
+            "iae": 123.21367782351182,
+            "success": true
+          },
+          "zF_step_-10pct": {
+            "iae": 100.84163419581138,
+            "success": true
+          },
+          "yD_setpoint_+0p5pct": {
+            "iae": 114.26725961675932,
+            "success": true
+          }
+        }
+      }
+    },
+    {
+      "multiplier": 100.0,
+      "r_lt": 10.0,
+      "r_vb": 10.0,
+      "nominal": {
+        "aggregate_iae": 0.39461676238385474,
+        "gate_wins_out_of_5": 5,
+        "gate_passed": true,
+        "per_scenario": {
+          "F_step_+20pct": {
+            "c0_iae": 0.33115427978893275,
+            "c1_iae": 0.11571535593766413,
+            "c1_wins": true
+          },
+          "F_step_-20pct": {
+            "c0_iae": 0.3037787718521129,
+            "c1_iae": 0.12091862391629346,
+            "c1_wins": true
+          },
+          "zF_step_+10pct": {
+            "c0_iae": 0.018017112466724848,
+            "c1_iae": 0.007595367801136357,
+            "c1_wins": true
+          },
+          "zF_step_-10pct": {
+            "c0_iae": 0.017931280693967704,
+            "c1_iae": 0.010780823140323565,
+            "c1_wins": true
+          },
+          "yD_setpoint_+0p5pct": {
+            "c0_iae": 0.16534546937077932,
+            "c1_iae": 0.1396065915884372,
+            "c1_wins": true
+          }
+        }
+      },
+      "off_nominal_worst_op": {
+        "F": 0.8,
+        "zF": 0.45,
+        "aggregate_iae": 147.41232482766412,
+        "F_step_+20pct_final_y_D": 0.8414066297924795,
+        "per_scenario": {
+          "F_step_+20pct": {
+            "iae": 34.55055023917917,
+            "success": true
+          },
+          "F_step_-20pct": {
+            "iae": 24.750663150548863,
+            "success": true
+          },
+          "zF_step_+10pct": {
+            "iae": 30.135776555259902,
+            "success": true
+          },
+          "zF_step_-10pct": {
+            "iae": 27.929768651311903,
+            "success": true
+          },
+          "yD_setpoint_+0p5pct": {
+            "iae": 30.045566231364276,
+            "success": true
+          }
+        }
+      }
+    },
+    {
+      "multiplier": 1000.0,
+      "r_lt": 100.0,
+      "r_vb": 100.0,
+      "nominal": {
+        "aggregate_iae": 0.919286966874965,
+        "gate_wins_out_of_5": 2,
+        "gate_passed": false,
+        "per_scenario": {
+          "F_step_+20pct": {
+            "c0_iae": 0.33115427978893275,
+            "c1_iae": 0.3709672341455894,
+            "c1_wins": false
+          },
+          "F_step_-20pct": {
+            "c0_iae": 0.3037787718521129,
+            "c1_iae": 0.3016768091561478,
+            "c1_wins": true
+          },
+          "zF_step_+10pct": {
+            "c0_iae": 0.018017112466724848,
+            "c1_iae": 0.013045086844190014,
+            "c1_wins": true
+          },
+          "zF_step_-10pct": {
+            "c0_iae": 0.017931280693967704,
+            "c1_iae": 0.019089675821883756,
+            "c1_wins": false
+          },
+          "yD_setpoint_+0p5pct": {
+            "c0_iae": 0.16534546937077932,
+            "c1_iae": 0.2145081609071539,
+            "c1_wins": false
+          }
+        }
+      },
+      "off_nominal_worst_op": {
+        "F": 0.8,
+        "zF": 0.45,
+        "aggregate_iae": 106.03712035208797,
+        "F_step_+20pct_final_y_D": 0.9028307446923788,
+        "per_scenario": {
+          "F_step_+20pct": {
+            "iae": 22.587942088861826,
+            "success": true
+          },
+          "F_step_-20pct": {
+            "iae": 19.439751121970662,
+            "success": true
+          },
+          "zF_step_+10pct": {
+            "iae": 22.08709999193016,
+            "success": true
+          },
+          "zF_step_-10pct": {
+            "iae": 20.110269717033166,
+            "success": true
+          },
+          "yD_setpoint_+0p5pct": {
+            "iae": 21.812057432292146,
+            "success": true
+          }
+        }
+      }
+    }
+  ],
+  "pareto_summary": {
+    "baseline_multiplier": 1.0,
+    "baseline_rationale": "Phase-2 baseline retained (\u00d71, r=0.1). Strongest C1/C0 margin (6.8\u00d7) on the nominal-OP gate. Off-nominal collapse documented as a structural limitation of fixed-weight linear MPC.",
+    "best_gate_passing_multiplier": 100.0,
+    "best_gate_passing_rationale": "Strongest off-nominal performance among regularization multipliers that still satisfy the Phase-2 gate (gate-wins \u2265 3/5). Used as the Bucket-B reference point in kpis.md \u00a76 so C2 is compared against the Pareto front, not against the weakest C1 tuning.",
+    "tradeoff_irreducible": true,
+    "tradeoff_statement": "No fixed regularization multiplier resolves both regimes. \u00d71: nominal 0.1089, off-nominal 776.35. \u00d7100: nominal 0.3946, off-nominal 147.41. \u00d71000: nominal 0.9193 (breaks Phase-2 gate), off-nominal 106.04. Motivates the adaptive supervisory layer."
+  }
+}

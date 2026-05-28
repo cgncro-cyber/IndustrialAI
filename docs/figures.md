@@ -172,6 +172,23 @@ For all figures: matplotlib + seaborn only, no plotly. Output formats: PDF (vect
 
 ---
 
+## Figure 9 — C1 Regularization Pareto Front
+
+**Purpose.** Substantiate the *Bucket-B motivation* in the paper: no single fixed-weight regularization for the linear-MPC C1 baseline resolves both the nominal-OP and the off-nominal-OP regime simultaneously. The agentic supervisor's contribution is making this trade-off go away by adaptively choosing setpoints / interim targets when the plant is in a near-singular regime.
+
+**Type.** Two-panel scatter-line: x-axis is the regularization multiplier (log scale, ×1, ×10, ×100, ×1000 on the baseline `r_lt = r_vb = 0.1`).
+
+**Content.**
+- Panel A — nominal aggregate IAE vs multiplier, with the C0 winner aggregate horizontal line for reference. Shaded "Phase-2 gate region" (C1 wins ≥ 3 / 5 nominal scenarios) marks where the variant remains a credible baseline. The gate-breaking multiplier(s) are shown in greyed-out style.
+- Panel B — off-nominal aggregate IAE at F=0.8 / zF=0.45 (worst-cluster OP) vs multiplier, plus the final `y_D` after the F_step_+20pct scenario as a secondary axis to make the collapse-vs-offset distinction visual.
+- Annotation: the gate-passing point with the lowest off-nominal IAE (×100 in the Day-5 build) is highlighted as the *Pareto reference* against which the C2 agent is compared in `kpis.md` §6 Bucket B.
+
+**Data source.** `data/reference/c1_regularization_sweep.json` produced by `tools/build_c1_regularization_sweep.py`.
+
+**Inclusion.** SAFEPROCESS main body · arXiv ✓ (pre-empts the "did you regularize the MPC?" reviewer objection with a complete Pareto sweep rather than a single point).
+
+---
+
 ## Optional / Add-On Figures (arXiv only, if space and time)
 
 - **A1 — Setpoint trajectory overlay.** Per-configuration plot of the setpoint sequences for a single disturbance, all configurations on the same axes. Shows the "personality" of each controller.
