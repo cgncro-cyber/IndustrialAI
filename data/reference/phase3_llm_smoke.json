@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-05-28T16:10:39.744086+00:00",
+  "git_sha": "13a37bd6a3ccec9d1c3148be74f515cf52ba30b1",
+  "endpoint": {
+    "base_url": "http://192.168.178.81:8080/v1",
+    "transport": "/v1/completions with client-side jinja2 template render",
+    "chat_template_path": "data/reference/nemotron_super_v1_5_chat_template.jinja",
+    "chat_template_sha256": "1b13a386b158bb4033ad9960032530554c47a92d1735c7dfce715efcabf30e5c",
+    "trust_remote_code": true,
+    "stop_tokens": [
+      "<|eot_id|>"
+    ]
+  },
+  "versions": {
+    "lms_cli": "CLI commit: 8d3f370",
+    "lm_studio_app": "0.4.9+1",
+    "mlx_lm_runtime_selected": "mlx-llm-mac-arm64-apple-metal-advsimd@1.8.5",
+    "python_venv": "3.12.13",
+    "mlx_lm": "0.31.3",
+    "mlx": "0.31.2",
+    "transformers": "5.9.0"
+  },
+  "test_a_prose": {
+    "wall_clock_seconds": 5.211435791978147,
+    "outcome": "prose_returned_no_json",
+    "snippet": "could not find a JSON object in LLM response: 'The Relative Gain Array (RGA) quantifies the interaction between input-output pairs in a multivariable process by indicating the degree to which each manipulated variable should be paired with each controlled variable for optimal control performance.'"
+  },
+  "test_b_tool_calls": {
+    "n": 10,
+    "parsed": 10,
+    "schema_ok": 10,
+    "reliability_rate": 1.0,
+    "schema_rate": 1.0,
+    "wall_clock_seconds": {
+      "mean": 5.505499437495018,
+      "p50": 5.6259960624884116,
+      "p95": 6.1324890419782605,
+      "max": 6.138561916013714,
+      "min": 4.328442916012136
+    },
+    "per_call": [
+      {
+        "i": 0,
+        "wall_clock_seconds": 4.328442916012136,
+        "parsed": true,
+        "schema_ok": true,
+        "had_think_block": false,
+        "proposal": {
+          "y_D_target": 0.99,
+          "x_B_target": 0.01,
+          "rationale": "Initial plant state already meets high purity specifications, no immediate adjustment needed to minimize IAE."
+        },
+        "raw_text_length": 166,
+        "raw_text_snippet": "{\"y_D_target\": 0.99, \"x_B_target\": 0.01, \"rationale\": \"Initial plant state already meets high purity specifications, no immediate adjustment needed to minimize IAE.\"}"
+      },
+      {
+        "i": 1,
+        "wall_clock_seconds": 4.7960188750003,
+        "parsed": true,
+        "schema_ok": true,
+        "had_think_block": false,
+        "proposal": {
+          "y_D_target": 0.99,
+          "x_B_target": 0.01,
+          "rationale": "Minimize IAE by slightly increasing y_D_target while decreasing x_B_target to approach ideal separation given current plant state."
+        },
+        "raw_text_length": 187,
+        "raw_text_snippet": "{\"y_D_target\": 0.99, \"x_B_target\": 0.01, \"rationale\": \"Minimize IAE by slightly increasing y_D_target while decreasing x_B_target to approach ideal separation given current plant state.\"}"
+      },
+      {
+        "i": 2,
+        "wall_clock_seconds": 5.186008041986497,
+        "parsed": true,
+        "schema_ok": true,
+        "had_think_block": false,
+        "proposal": {
+          "y_D_target": 0.992,
+          "x_B_target": 0.01,
+          "rationale": "Minimize IAE by slightly increasing y_D_target while decreasing x_B_target, staying within physical bounds and ensuring y_D_target > x_B_target"
+        },
+        "raw_text_length": 202,
+        "raw_text_snippet": "{\"y_D_target\": 0.992, \"x_B_target\": 0.010, \"rationale\": \"Minimize IAE by slightly increasing y_D_target while decreasing x_B_target, staying within physical bounds and ensuring y_D_target > x_B_target\"}"
+      },
+      {
+        "i": 3,
+        "wall_clock_seconds": 5.90395087498473,
+        "parsed": true,
+        "schema_ok": true,
+        "had_think_block": false,
+        "proposal": {
+          "y_D_target": 0.99,
+          "x_B_target": 0.01,
+          "rationale": "Minimize IAE by slightly increasing y_D_target and decreasing x_B_target while maintaining y_D_target > x_B_target, considering the plant's current state and the goal of reducing error."
+        },
+        "raw_text_length": 244,
+        "raw_text_snippet": "{\"y_D_target\": 0.990, \"x_B_target\": 0.010, \"rationale\": \"Minimize IAE by slightly increasing y_D_target and decreasing x_B_target while maintaining y_D_target > x_B_target, considering the plant's current state and the goal of reducing error.\"}"
+      },
+      {
+        "i": 4,
+        "wall_clock_seconds": 6.1324890419782605,
+        "parsed": true,
+        "schema_ok": true,
+        "had_think_block": false,
+        "proposal": {
+          "y_D_target": 0.992,
+          "x_B_target": 0.009,
+          "rationale": "Minimize IAE by slightly increasing y_D_target and decreasing x_B_target while maintaining y_D_target > x_B_target, considering the current plant state and aiming for tighter control around the curren"
+        },
+        "raw_text_length": 270,
+        "raw_text_snippet": "{\"y_D_target\": 0.992, \"x_B_target\": 0.009, \"rationale\": \"Minimize IAE by slightly increasing y_D_target and decreasing x_B_target while maintaining y_D_target > x_B_target, considering the current plant state and aiming for tighter control around the current setpoint.\"}"
+      },
+      {
+        "i": 5,
+        "wall_clock_seconds": 5.971772999997484,
+        "parsed": true,
+        "schema_ok": true,
+        "had_think_block": false,
+        "proposal": {
+          "y_D_target": 0.99,
+          "x_B_target": 0.01,
+          "rationale": "Minimize IAE by slightly increasing y_D_target and decreasing x_B_target while maintaining y_D_target > x_B_target, considering the plant's current state and the goal of distillation purity."
+        },
+        "raw_text_length": 249,
+        "raw_text_snippet": "{\"y_D_target\": 0.990, \"x_B_target\": 0.010, \"rationale\": \"Minimize IAE by slightly increasing y_D_target and decreasing x_B_target while maintaining y_D_target > x_B_target, considering the plant's current state and the goal of distillation purity.\"}"
+      },
+      {
+        "i": 6,
+        "wall_clock_seconds": 5.190007166995201,
+        "parsed": true,
+        "schema_ok": true,
+        "had_think_block": false,
+        "proposal": {
+          "y_D_target": 0.992,
+          "x_B_target": 0.01,
+          "rationale": "Minimize IAE by slightly increasing y_D_target and decreasing x_B_target, staying within physical bounds and ensuring y_D_target > x_B_target"
+        },
+        "raw_text_length": 200,
+        "raw_text_snippet": "{\"y_D_target\": 0.992, \"x_B_target\": 0.010, \"rationale\": \"Minimize IAE by slightly increasing y_D_target and decreasing x_B_target, staying within physical bounds and ensuring y_D_target > x_B_target\"}"
+      },
+      {
+        "i": 7,
+        "wall_clock_seconds": 6.138561916013714,
+        "parsed": true,
+        "schema_ok": true,
+        "had_think_block": false,
+        "proposal": {
+          "y_D_target": 0.992,
+          "x_B_target": 0.009,
+          "rationale": "Minimize IAE by slightly increasing y_D_target and decreasing x_B_target while maintaining y_D_target > x_B_target, considering the current plant state and aiming for tighter control around the curren"
+        },
+        "raw_text_length": 270,
+        "raw_text_snippet": "{\"y_D_target\": 0.992, \"x_B_target\": 0.009, \"rationale\": \"Minimize IAE by slightly increasing y_D_target and decreasing x_B_target while maintaining y_D_target > x_B_target, considering the current plant state and aiming for tighter control around the current setpoint.\"}"
+      },
+      {
+        "i": 8,
+        "wall_clock_seconds": 5.348041249992093,
+        "parsed": true,
+        "schema_ok": true,
+        "had_think_block": false,
+        "proposal": {
+          "y_D_target": 0.99,
+          "x_B_target": 0.01,
+          "rationale": "Minimizing IAE requires targeting values close to current plant outputs while ensuring y_D > x_B; slight increase in purity targets leverages column efficiency."
+        },
+        "raw_text_length": 219,
+        "raw_text_snippet": "{\"y_D_target\": 0.990, \"x_B_target\": 0.010, \"rationale\": \"Minimizing IAE requires targeting values close to current plant outputs while ensuring y_D > x_B; slight increase in purity targets leverages column efficiency.\"}"
+      },
+      {
+        "i": 9,
+        "wall_clock_seconds": 6.059701291989768,
+        "parsed": true,
+        "schema_ok": true,
+        "had_think_block": false,
+        "proposal": {
+          "y_D_target": 0.992,
+          "x_B_target": 0.01,
+          "rationale": "Minimize IAE by slightly increasing y_D_target and decreasing x_B_target while maintaining y_D_target > x_B_target, considering the current plant state and aiming for tighter control around the desire"
+        },
+        "raw_text_length": 272,
+        "raw_text_snippet": "{\"y_D_target\": 0.992, \"x_B_target\": 0.010, \"rationale\": \"Minimize IAE by slightly increasing y_D_target and decreasing x_B_target while maintaining y_D_target > x_B_target, considering the current plant state and aiming for tighter control around the desired separation.\"}"
+      }
+    ]
+  },
+  "test_c_revision_mode": {
+    "parsed": false,
+    "wall_clock_seconds": 331.79448791701,
+    "parse_error": "could not find a JSON object in LLM response: '<think>\\nOkay, let\\'s tackle this problem step by step. The user is asking me to act as the supervisory layer for a binary distillation column and choose a target pair (y_D_target, x_B_target) that minimizes the Integral Absolute Error (IAE) under the c"
+  }
+}

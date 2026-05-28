@@ -40,6 +40,7 @@ __all__ = [
     "LLMClient",
     "LLMResponse",
     "LMStudioLLMClient",
+    "MLXServerLLMClient",
     "MockLLMClient",
 ]
 
@@ -57,7 +58,23 @@ class LLMResponse:
 
 
 class LLMClient(ABC):
-    """Abstract LLM client interface used by the agent graph."""
+    """Abstract LLM client interface used by the agent graph.
+
+    The ``reasoning`` flag selects between Nemotron-Super v1.5's two
+    inference modes (per ADR 005 amendment 2026-05-28):
+
+    - ``reasoning=False`` (default for tool-call cycles): ``/no_think``
+      marker injected into the system prompt, ``<think></think>``
+      stubbed by the model; produces JSON-only output in ~10-20 s.
+    - ``reasoning=True`` (used for Critic-revision rounds): chain-of-
+      thought reasoning enabled, larger ``max_tokens`` budget so the
+      JSON reaches the response after a long deliberation. Costs
+      ~80-150 s per call.
+
+    Implementations are free to interpret ``max_tokens=None`` as
+    "use the reasoning-state-appropriate default". Mocks ignore the
+    flag entirely.
+    """
 
     name: str
 
@@ -67,9 +84,10 @@ class LLMClient(ABC):
         *,
         system_prompt: str,
         user_prompt: str,
-        max_tokens: int = 256,
+        max_tokens: int | None = None,
         temperature: float = 0.6,
         top_p: float = 0.95,
+        reasoning: bool = False,
     ) -> LLMResponse: ...
 
 
@@ -119,11 +137,12 @@ class MockLLMClient(LLMClient):
         *,
         system_prompt: str,
         user_prompt: str,
-        max_tokens: int = 256,
+        max_tokens: int | None = None,
         temperature: float = 0.6,
         top_p: float = 0.95,
+        reasoning: bool = False,
     ) -> LLMResponse:
-        del system_prompt, max_tokens, temperature, top_p
+        del system_prompt, max_tokens, temperature, top_p, reasoning
 
         if self.policy == "nominal":
             y_D, x_B = (
@@ -261,10 +280,12 @@ class LMStudioLLMClient(LLMClient):
         *,
         system_prompt: str,
         user_prompt: str,
-        max_tokens: int = 256,
+        max_tokens: int | None = None,
         temperature: float = 0.6,
         top_p: float = 0.95,
+        reasoning: bool = False,
     ) -> LLMResponse:
+        del reasoning  # LM Studio endpoint expects the model to manage modes
         client = self._ensure_client()
         messages = [
             ("system", system_prompt),
@@ -275,7 +296,7 @@ class LMStudioLLMClient(LLMClient):
         try:
             reply = client.invoke(
                 messages,
-                max_tokens=max_tokens,
+                max_tokens=max_tokens if max_tokens is not None else 256,
                 temperature=temperature,
                 top_p=top_p,
             )
@@ -315,3 +336,173 @@ def _parse_setpoint_json(text: str) -> SetpointProposalInput:
             f"invalid JSON in LLM response: {match.group(0)!r} ({exc})"
         ) from exc
     return SetpointProposalInput(**payload)
+
+
+# ---------------------------------------------------------------------------
+# Native mlx_lm.server backend (ADR 005 amendment, post-Schritt-4 diagnosis).
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _MLXServerConfig:
+    """Configuration for the native ``mlx_lm.server`` transport.
+
+    Used when the LM Studio bundled mlx-engine cannot load nemotron-nas
+    (LM Studio bug #704) and we fall back to a freshly-installed
+    ``mlx-lm`` server with explicit chat-template rendering on the
+    client side. See ADR 005 amendment 2026-05-28 for the empirical
+    chain that motivates this transport.
+    """
+
+    base_url: str = "http://192.168.178.81:8080/v1"
+    model: str = "default_model"
+    api_key: str = (
+        "mlx-server"  # mlx_lm.server ignores it; openai client requires a non-empty string
+    )
+    request_timeout_s: float = 600.0
+
+
+class MLXServerLLMClient(LLMClient):
+    """Native ``mlx_lm.server`` transport with client-side chat-template rendering.
+
+    The server hits ``/v1/completions`` (NOT ``/v1/chat/completions``)
+    so we bypass the transformers 5.x
+    ``apply_chat_template(tokenize=True)`` regression for
+    nemotron-nas tokenizers (empirically isolated post-Schritt-4: the
+    chat-completions tokenization path returns a batched
+    ``Encoding`` list that the mlx server cannot consume, producing
+    a degenerate ``a a a ...`` repetition loop).
+
+    The chat template is rendered on the client side via ``jinja2``
+    from the model's bundled ``chat_template.jinja`` file. The
+    pinned template fixture lives at
+    ``data/reference/nemotron_super_v1_5_chat_template.jinja`` with
+    its SHA-256 recorded in the ADR 005 amendment for
+    reproducibility — any model swap requires re-pinning the
+    template.
+
+    Network errors raise :class:`LLMEndpointUnreachableError`; JSON
+    extraction failures raise :class:`LLMResponseParseError`. ADR
+    010 contract preserved.
+    """
+
+    name: str = "mlx_server"
+
+    def __init__(
+        self,
+        *,
+        base_url: str | None = None,
+        model: str | None = None,
+        api_key: str | None = None,
+        request_timeout_s: float | None = None,
+        chat_template_path: str | None = None,
+    ) -> None:
+        self._cfg = _MLXServerConfig(
+            base_url=base_url or _MLXServerConfig.base_url,
+            model=model or _MLXServerConfig.model,
+            api_key=api_key or _MLXServerConfig.api_key,
+            request_timeout_s=request_timeout_s or _MLXServerConfig.request_timeout_s,
+        )
+        if chat_template_path is None:
+            from pathlib import Path
+
+            chat_template_path = str(
+                Path(__file__).resolve().parents[3]
+                / "data"
+                / "reference"
+                / "nemotron_super_v1_5_chat_template.jinja"
+            )
+        self._template = _load_jinja_template(chat_template_path)
+        self._client: Any | None = None
+
+    def _ensure_client(self) -> Any:
+        if (
+            self._client is not None
+        ):  # pragma: no cover - cached path exercised only on the second call against a live endpoint
+            return self._client
+        from openai import OpenAI
+
+        self._client = OpenAI(
+            base_url=self._cfg.base_url,
+            api_key=self._cfg.api_key,
+            timeout=self._cfg.request_timeout_s,
+        )
+        return self._client
+
+    def complete(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int | None = None,
+        temperature: float = 0.6,
+        top_p: float = 0.95,
+        reasoning: bool = False,
+    ) -> LLMResponse:
+        client = self._ensure_client()
+        # Modal reasoning toggle per ADR 005 amendment 2026-05-28:
+        #   reasoning=False  → /no_think marker, smaller budget,
+        #                      typical tool-call cycle (10-20 s).
+        #   reasoning=True   → no marker, large budget,
+        #                      Critic-revision deliberation (~80-150 s).
+        # The /no_think marker is detected and stripped by the
+        # chat_template.jinja itself (see template's system_content
+        # handling at the top of the file).
+        if reasoning:
+            effective_system_prompt = system_prompt
+            effective_max_tokens = max_tokens if max_tokens is not None else 4096
+        else:
+            effective_system_prompt = "/no_think " + system_prompt
+            effective_max_tokens = max_tokens if max_tokens is not None else 512
+        # Client-side template rendering mirrors what
+        # tokenizer.apply_chat_template(tokenize=False) would emit.
+        rendered = self._template.render(
+            messages=[
+                {"role": "system", "content": effective_system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            tools=None,
+            add_generation_prompt=True,
+        )
+        # ADR 010 §2: single attempt, named exception on network failure.
+        try:
+            reply = client.completions.create(  # pragma: no cover - requires a live mlx_lm.server endpoint
+                model=self._cfg.model,
+                prompt=rendered,
+                max_tokens=effective_max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                stop=["<|eot_id|>"],
+            )
+        except Exception as exc:
+            raise LLMEndpointUnreachableError(
+                f"mlx_lm.server endpoint {self._cfg.base_url!r} unreachable: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        raw = reply.choices[0].text  # pragma: no cover - live endpoint path
+        proposal = _parse_setpoint_json(raw)  # pragma: no cover
+        return LLMResponse(  # pragma: no cover
+            proposal=proposal,
+            raw_text=raw,
+        )
+
+
+def _load_jinja_template(path: str) -> Any:
+    """Load the model's ``chat_template.jinja`` with HuggingFace-compatible Jinja semantics.
+
+    Matches the ``trim_blocks``/``lstrip_blocks`` defaults used by
+    HuggingFace's ``apply_chat_template`` so the client-side
+    rendering produces byte-identical output to the bundled
+    tokenizer's render path.
+    """
+    import jinja2
+
+    with open(path, encoding="utf-8") as fh:
+        template_text = fh.read()
+    env = jinja2.Environment(
+        extensions=["jinja2.ext.loopcontrols"],
+        trim_blocks=True,
+        lstrip_blocks=True,
+        autoescape=False,
+    )
+    return env.from_string(template_text)

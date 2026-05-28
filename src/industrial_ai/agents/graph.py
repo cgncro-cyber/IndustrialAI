@@ -153,7 +153,19 @@ def _optimizer_node(
     )
     if critic_feedback:
         body += f"\n\nCritic feedback on previous proposal: {critic_feedback}"
-    reply = llm_client.complete(system_prompt=system_prompt, user_prompt=body)
+    # Modal reasoning toggle per ADR 005 amendment 2026-05-28:
+    # Round 1 (no critic feedback) runs in fast /no_think mode for
+    # the typical accept path; revisions enable chain-of-thought so
+    # the Optimizer has room to reconsider against the Critic's
+    # objection. The LLMClient implementation (MLXServerLLMClient)
+    # consumes ``reasoning`` to inject the marker and pick the
+    # max-tokens budget.
+    reasoning = critic_feedback is not None
+    reply = llm_client.complete(
+        system_prompt=system_prompt,
+        user_prompt=body,
+        reasoning=reasoning,
+    )
     return OptimizerProposal(
         y_D_target=reply.proposal.y_D_target,
         x_B_target=reply.proposal.x_B_target,

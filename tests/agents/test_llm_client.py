@@ -18,7 +18,9 @@ from industrial_ai.agents.errors import (
 from industrial_ai.agents.llm_client import (
     LLMResponse,
     LMStudioLLMClient,
+    MLXServerLLMClient,
     MockLLMClient,
+    _load_jinja_template,
     _parse_setpoint_json,
 )
 from industrial_ai.agents.tools import SetpointProposalInput
@@ -133,6 +135,94 @@ def test_extract_y_D_returns_none_on_unmatched_prompt() -> None:
     from industrial_ai.agents.llm_client import _extract_y_D_from_prompt
 
     assert _extract_y_D_from_prompt("no signal in this prompt") is None
+
+
+def test_mlx_server_client_chat_template_renders_to_expected_shape() -> None:
+    """Client-side jinja2 render must produce the same Llama-3 shape as the model tokenizer.
+
+    Byte-identical comparison against the format empirically confirmed
+    during Schritt-4 diagnosis (Test 2 vs server-rendered prompt).
+    """
+    template = _load_jinja_template("data/reference/nemotron_super_v1_5_chat_template.jinja")
+    rendered = template.render(
+        messages=[
+            {"role": "system", "content": "You are a process control engineer. Answer briefly."},
+            {"role": "user", "content": "What does RGA measure?"},
+        ],
+        tools=None,
+        add_generation_prompt=True,
+    )
+    expected = (
+        "<|begin_of_text|>"
+        "<|start_header_id|>system<|end_header_id|>\n\n"
+        "You are a process control engineer. Answer briefly.\n\n"
+        "<|eot_id|>"
+        "<|start_header_id|>user<|end_header_id|>\n\n"
+        "What does RGA measure?"
+        "<|eot_id|>"
+        "<|start_header_id|>assistant<|end_header_id|>\n\n"
+    )
+    assert rendered == expected
+
+
+def test_mlx_server_no_think_marker_injects_empty_think_stub() -> None:
+    """``/no_think`` in the system content must trigger the template's empty think stub.
+
+    The chat_template.jinja appends ``<think>\\n\\n</think>\\n\\n``
+    after the assistant header when ``enable_thinking`` is false.
+    That stub is what gates the model into skip-reasoning mode and is
+    the mechanism behind the modal reasoning toggle in the
+    MLXServerLLMClient (ADR 005 amendment 2026-05-28).
+    """
+    template = _load_jinja_template("data/reference/nemotron_super_v1_5_chat_template.jinja")
+    rendered_no_think = template.render(
+        messages=[
+            {"role": "system", "content": "/no_think You are a controller. Be brief."},
+            {"role": "user", "content": "Status?"},
+        ],
+        tools=None,
+        add_generation_prompt=True,
+    )
+    assert rendered_no_think.endswith(
+        "<|start_header_id|>assistant<|end_header_id|>\n\n<think>\n\n</think>\n\n"
+    )
+    # And without the marker, no stub.
+    rendered_with_think = template.render(
+        messages=[
+            {"role": "system", "content": "You are a controller. Be brief."},
+            {"role": "user", "content": "Status?"},
+        ],
+        tools=None,
+        add_generation_prompt=True,
+    )
+    assert "<think>" not in rendered_with_think
+
+
+def test_mlx_server_client_lazy_construction() -> None:
+    """Instantiating the MLX server client must not require a running server."""
+    client = MLXServerLLMClient(base_url="http://nowhere.invalid:9999/v1")
+    assert client.name == "mlx_server"
+    assert client._client is None  # lazy until first call
+
+
+def test_mlx_server_client_against_dead_endpoint_raises_named_error() -> None:
+    """ADR 010 §2: a single attempt, then LLMEndpointUnreachableError with the URL."""
+    client = MLXServerLLMClient(
+        base_url="http://192.0.2.1:65535/v1",
+        request_timeout_s=2.0,
+    )
+    with pytest.raises(LLMEndpointUnreachableError) as exc_info:
+        client.complete(system_prompt="sys", user_prompt="user")
+    assert "192.0.2.1:65535" in str(exc_info.value)
+
+
+def test_mlx_server_client_unknown_chat_template_path_raises() -> None:
+    """Missing template fixture must fail loudly at construction time."""
+    with pytest.raises(FileNotFoundError):
+        MLXServerLLMClient(
+            base_url="http://localhost:9999/v1",
+            chat_template_path="/nonexistent/path/chat_template.jinja",
+        )
 
 
 def test_lm_studio_client_against_dead_endpoint_raises_named_error() -> None:
