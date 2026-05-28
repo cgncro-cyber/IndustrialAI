@@ -158,6 +158,25 @@ The bucket classification decision tree (`kpis.md` §6) operationalizes the *"un
 
 ---
 
+## 7. Queued doc edits (apply after current Phase-3 kickoff commits land)
+
+### 7.1 `kpis.md` §6 — add statistical-significance component to bucket classification — RESOLVED 2026-05-28
+
+**Origin.** External review (2026-05-27) flagged that the Phase 2 C1 baseline (aggregate IAE 0.1224) is small enough that a 5 % gap between C2 and C1 would not be statistically distinguishable at N ≥ 10 seeds. The original Decision Tree (`kpis.md` §6) compared point estimates only, which would have risked classifying a non-significant difference as "Agent dominates".
+
+**Resolved by `kpis.md` §6 rewrite (2026-05-28).** Bucket assignment now requires bootstrap-CI separation, not point-estimate comparison:
+
+- **Bucket A** triggers only if C2's 95 % bootstrap CI on `aggregate_iae` lies entirely below C1's point estimate AND the 0.85× ratio test holds against C2's CI upper bound (not its mean).
+- **Bucket B** triggers only if C2's 95 % bootstrap CI on `off_nominal_robustness_iae` lies entirely below 0.67 × C1's point estimate.
+- **Bucket C** triggers only if both intercept-rate and detection-rate CI *lower bounds* exceed 0.7.
+- **Step 5 (ambiguous)** is now explicitly the publishable-failure-mode landing zone for CI overlap. The text states this directly: ambiguous is an outcome to be reported, not avoided.
+
+The decision tree also references the bootstrap convention explicitly (`mean ± bootstrap 95 % CI per Phase 5 protocol, N ≥ 10 seeds`) so the statistical pipeline is unambiguous from the KPI document alone.
+
+**Landed in commit.** See the `docs:` commit that resolved this item; `kpis.md` changelog entry dated 2026-05-28 records the structural shift.
+
+---
+
 ## Changelog
 
 - 2026-05-27 (initial) — Initial version. Captures Day-2.5 shootout outcomes, external review feedback (Phase-3 outcome buckets, false-negative deliverable), and the LLM-stack alignment question raised at Phase-2 close.
@@ -165,3 +184,5 @@ The bucket classification decision tree (`kpis.md` §6) operationalizes the *"un
 - 2026-05-27 (Phase 2 close / Day 3 results) — §2.2 augmented with empirical bucket-probability re-estimate after Day-3 C1 results. Aggregate C1/C0 ratio 6.8× (5/5 scenarios won by C1, max wall-clock 345 ms per supervisory tick). Bucket B becomes the most likely outcome; Bucket A becomes harder. Phase 3 scenario design must include off-nominal/regime-change evaluation, not only nominal-OP disturbances.
 - 2026-05-27 (KPI session) — §5.2 resolved. `docs/kpis.md` drafted with five KPIs (aggregate_iae, off_nominal_robustness_iae, constraint_violation_intercept_rate + detection_rate, linearization_consistency, supervisory_cycle_wallclock) and a bucket-classification decision tree. Four open items at the end of `kpis.md` require yes/keep review before Phase 3 kickoff.
 - 2026-05-27 (KPI review closed) — Four review items in `kpis.md` resolved: 30-min counterfactual horizon retained + 5-min fast-fail sub-check added; 16-point off-nominal grid retained + 4-point screening grid for prompt iteration; safety constraint list expanded from 7 to 9 (added M_D / M_B holdup bounds, fixed citation to `column_a/assumptions.md`); Bucket B threshold three-band interpretation (1.5× minimum / 2.0× strong evidence). KPI set is locked. §5.2 above updated to reflect closure.
+- 2026-05-27 (Phase 3 kickoff / external review) — §7 added: queued doc edits to apply after current Phase-3 kickoff commits. §7.1: augment `kpis.md` §6 with bootstrap-CI separation for bucket classification (point-estimate comparison risks classifying non-significant differences as "Agent dominates" given the small C1 aggregate IAE baseline). Edit deferred to avoid simultaneous-edit conflict with Claude Code's in-flight work in `paper/methods_phase3_buckets.md` and `src/industrial_ai/agents/`. External-review recommendation to start the Qwen ablation in parallel during Phase 3 was considered and rejected: ADR 005 already makes the swap a config-file change via `langchain-openai` against the LM-Studio endpoint, and Phase 5 is the methodologically correct slot for the ablation run; building it before the Primary is empirically validated quadruples the debug surface without earlier insight.
+- 2026-05-28 (§7.1 resolved) — `kpis.md` §6 rewritten to require bootstrap 95 % CI separation for all bucket-classification thresholds (Bucket A: C2 CI entirely below C1 point and 0.85× cleared on CI upper bound; Bucket B: CI entirely below 0.67 × C1 point; Bucket C: both rates' CI lower bounds above 0.7). Step 5 (ambiguous) text strengthened to make publishable-failure-mode framing explicit. `kpis.md` changelog updated. §7.1 status flipped from "queued" to "RESOLVED".
