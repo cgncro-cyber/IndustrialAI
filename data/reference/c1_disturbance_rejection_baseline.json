@@ -1,0 +1,588 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-05-28T17:24:04.580622+00:00",
+  "git_sha": "b4aff8840e4c0eee2db0c88940ffd7b491105ee2",
+  "purpose": "C1 (Pareto-reference x100, r_lt=r_vb=10) disturbance-rejection-only off-nominal baseline. The Bucket-B comparator on the \u00a72.4 sub-metric.",
+  "grid": {
+    "F_axis": [
+      0.8,
+      0.9,
+      1.1,
+      1.2
+    ],
+    "zF_axis": [
+      0.45,
+      0.475,
+      0.525,
+      0.55
+    ],
+    "n_ops": 16,
+    "source": "docs/kpis.md \u00a72.2"
+  },
+  "pareto_reference": {
+    "multiplier": 100.0,
+    "r_lt": 10.0,
+    "r_vb": 10.0,
+    "rationale": "Best gate-passing fixed-weight C1 from data/reference/c1_regularization_sweep.json (kpis.md \u00a76 Step 3)."
+  },
+  "pre_stage_cache_path": "data/reference/off_nominal_on_spec_pre_stages.json",
+  "infeasible_pre_stage_count": 1,
+  "aggregate": {
+    "mean": 0.9943841659976415,
+    "p50": 1.054178025167688,
+    "p95": 1.1357806054858204,
+    "max": 1.1368030698463685,
+    "min": 0.8351214277083396,
+    "ops_finite": 15,
+    "ops_total": 16,
+    "off_nominal_disturbance_rejection_iae": 1.1357806054858204
+  },
+  "per_op": [
+    {
+      "F": 0.8,
+      "zF": 0.45,
+      "pre_stage_mvs": {
+        "LT_star": 2.1674264335371025,
+        "VB_star": 2.526610139854531
+      },
+      "y_D_at_onspec": 0.9899998758686479,
+      "x_B_at_onspec": 0.009999997261340626,
+      "aggregate_iae": 0.8378330541774685,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.2255024169862736,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.08866833172888008
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.19539097520507318
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.1589261635523887
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.03319428649315491
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.36165329719797157
+        }
+      }
+    },
+    {
+      "F": 0.8,
+      "zF": 0.475,
+      "skipped": "pre_stage_infeasible",
+      "pre_stage_error_inf_norm": 0.007670382793604045
+    },
+    {
+      "F": 0.8,
+      "zF": 0.525,
+      "pre_stage_mvs": {
+        "LT_star": 2.161431491967318,
+        "VB_star": 2.581839668244252
+      },
+      "y_D_at_onspec": 0.9900000680252499,
+      "x_B_at_onspec": 0.009999877650908536,
+      "aggregate_iae": 0.8361731830044301,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.21238070901017636,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.0892903487666562
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.19616191285712464
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.1602738805367535
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.029803235244331927
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.3606438055995638
+        }
+      }
+    },
+    {
+      "F": 0.8,
+      "zF": 0.55,
+      "pre_stage_mvs": {
+        "LT_star": 2.1561288806066825,
+        "VB_star": 2.5969453796386195
+      },
+      "y_D_at_onspec": 0.9899998355979381,
+      "x_B_at_onspec": 0.009999977981542476,
+      "aggregate_iae": 0.8351214277083396,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.21767916600219905,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.08931587857450432
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.19604294802240513
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.16077159311079953
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.029219260476962862
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.3597717475236677
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.45,
+      "pre_stage_mvs": {
+        "LT_star": 2.438356623012975,
+        "VB_star": 2.8424381650176413
+      },
+      "y_D_at_onspec": 0.9899999813063741,
+      "x_B_at_onspec": 0.010000030407464187,
+      "aggregate_iae": 0.9125971124625978,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.259131291997619,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.10297770678612359
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.22082537858828205
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.1797046041368094
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.034968060148488786
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.3741213628028941
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.475,
+      "pre_stage_mvs": {
+        "LT_star": 2.4379056269214052,
+        "VB_star": 2.864946440928701
+      },
+      "y_D_at_onspec": 0.9900000327659304,
+      "x_B_at_onspec": 0.010000041829652074,
+      "aggregate_iae": 0.9119941447992634,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.23189999998430721,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.10331392333008843
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.22133499187205036
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.18013758097864013
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.03331611098540148
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.3738915376330832
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.525,
+      "pre_stage_mvs": {
+        "LT_star": 2.431604139708851,
+        "VB_star": 2.9045632972835325
+      },
+      "y_D_at_onspec": 0.9900000214953433,
+      "x_B_at_onspec": 0.010000040893896067,
+      "aggregate_iae": 0.9099173921876045,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.22770391701487824,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.10362921355097066
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.2217064521578362
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.18099357387364137
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.030993751833113502
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.37259440077204276
+        }
+      }
+    },
+    {
+      "F": 0.9,
+      "zF": 0.55,
+      "pre_stage_mvs": {
+        "LT_star": 2.425654652646732,
+        "VB_star": 2.921573022122107
+      },
+      "y_D_at_onspec": 0.9899999894572277,
+      "x_B_at_onspec": 0.010000000528907612,
+      "aggregate_iae": 0.9083624578833756,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.22301933297421783,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.1036111025625946
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.22158620584430197
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.1814187064958468
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.030267045411600437
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.37147939756903176
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.45,
+      "pre_stage_mvs": {
+        "LT_star": 2.9802170514132342,
+        "VB_star": 3.474094602582279
+      },
+      "y_D_at_onspec": 0.990000002390077,
+      "x_B_at_onspec": 0.009999996370667959,
+      "aggregate_iae": 1.0617500376606572,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.2399042499891948,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.13342052246256417
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.2713877457584638
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.22283931198768106
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.03844644189831953
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.39565601555362867
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.475,
+      "pre_stage_mvs": {
+        "LT_star": 2.9796593272090277,
+        "VB_star": 3.50159816495616
+      },
+      "y_D_at_onspec": 0.9899999708688552,
+      "x_B_at_onspec": 0.010000032450695662,
+      "aggregate_iae": 1.0605716374627856,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.22496216700528748,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.1338258835541775
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.2720108321869422
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.2232647859091183
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.03631729636987149
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.39515283944267615
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.525,
+      "pre_stage_mvs": {
+        "LT_star": 2.971961077743967,
+        "VB_star": 3.5500223022318784
+      },
+      "y_D_at_onspec": 0.9899999999963334,
+      "x_B_at_onspec": 0.010000000007535656,
+      "aggregate_iae": 1.056843134856181,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.28732279100222513,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.13413074102043432
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.2724814629506934
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.2238679223743773
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.0331489404541153
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.3932140680565608
+        }
+      }
+    },
+    {
+      "F": 1.1,
+      "zF": 0.55,
+      "pre_stage_mvs": {
+        "LT_star": 2.9646896628478308,
+        "VB_star": 3.570812111688175
+      },
+      "y_D_at_onspec": 0.9900000007083426,
+      "x_B_at_onspec": 0.0099999994099942,
+      "aggregate_iae": 1.054178025167688,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.22597958400729112,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.13404138535303733
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.2723441275718365
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.22402702240683559
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.03202913369792235
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.3917363561380563
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.45,
+      "pre_stage_mvs": {
+        "LT_star": 3.2511457427082284,
+        "VB_star": 3.7899212459575047
+      },
+      "y_D_at_onspec": 0.9900000152307437,
+      "x_B_at_onspec": 0.010000001313524734,
+      "aggregate_iae": 1.1368030698463685,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.20811399997910485,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.14952448276219
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.29675988269836395
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.24516702974886012
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.04013040718330339
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.4052212674536509
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.475,
+      "pre_stage_mvs": {
+        "LT_star": 3.2505407368736052,
+        "VB_star": 3.819928485968276
+      },
+      "y_D_at_onspec": 0.9899999998386296,
+      "x_B_at_onspec": 0.00999999514542147,
+      "aggregate_iae": 1.135342406474157,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.21096929101622663,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.14996555559190738
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.29743855230937233
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.24558298967037648
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.03778677030084109
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.40456853860165976
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.525,
+      "pre_stage_mvs": {
+        "LT_star": 3.2421379019401084,
+        "VB_star": 3.8727500710318905
+      },
+      "y_D_at_onspec": 0.9899999755044617,
+      "x_B_at_onspec": 0.009999974157358163,
+      "aggregate_iae": 1.1307742027884082,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.2060195000085514,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.15027256732075983
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.2979489358359421
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.24600385170161052
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.034196075624710595
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.4023527723053852
+        }
+      }
+    },
+    {
+      "F": 1.2,
+      "zF": 0.55,
+      "pre_stage_mvs": {
+        "LT_star": 3.2342068865732876,
+        "VB_star": 3.8954313708400012
+      },
+      "y_D_at_onspec": 0.9900000041752326,
+      "x_B_at_onspec": 0.010000004934027997,
+      "aggregate_iae": 1.1275012034852971,
+      "aggregate_iae_finite": true,
+      "max_cycle_wall_clock_seconds": 0.24969670799328014,
+      "any_scenario_failed": false,
+      "scenarios": {
+        "F_step_+20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.15014126109975134
+        },
+        "F_step_-20pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.297800577009142
+        },
+        "zF_step_+10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.24599559200626703
+        },
+        "zF_step_-10pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.03285725839687639
+        },
+        "yD_setpoint_+0p5pct": {
+          "success": true,
+          "iae_mole_fraction_min": 0.4007065149732604
+        }
+      }
+    }
+  ]
+}
