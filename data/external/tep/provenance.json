@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "doi": "10.7910/DVN/6C3JR1",
+  "title": "Additional Tennessee Eastman Process Simulation Data for Anomaly Detection Evaluation",
+  "authors": [
+    "Cory A. Rieth",
+    "Ben D. Amsel",
+    "Randy Tran",
+    "Maia B. Cook"
+  ],
+  "year": 2017,
+  "publisher": "Harvard Dataverse",
+  "license": "CC0 1.0 (public domain dedication)",
+  "dataset_pid": "https://doi.org/10.7910/DVN/6C3JR1",
+  "version": {
+    "number": 1,
+    "minor": 0,
+    "state": "RELEASED",
+    "release_time": "2017-07-06T15:23:33Z"
+  },
+  "accessed_at_utc": "2026-05-28T16:49:37.499926+00:00",
+  "n_files_listed": 4,
+  "bulk_downloaded": false,
+  "tool_path": "tools/acquire_tep_dataset.py"
+}

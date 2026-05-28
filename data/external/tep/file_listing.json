@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "doi": "10.7910/DVN/6C3JR1",
+  "dataset_pid": "https://doi.org/10.7910/DVN/6C3JR1",
+  "version": {
+    "number": 1,
+    "minor": 0,
+    "state": "RELEASED",
+    "release_time": "2017-07-06T15:23:33Z"
+  },
+  "fetched_at_utc": "2026-05-28T16:49:37.499525+00:00",
+  "n_files": 4,
+  "files": [
+    {
+      "label": "TEP_FaultFree_Testing.RData",
+      "filename": "TEP_FaultFree_Testing.RData",
+      "directory_label": null,
+      "size_bytes": 47327663,
+      "content_type": "application/x-rlang-transport",
+      "upstream_sha256": "38ad9810fc871026157086ae2c2f0ee9",
+      "checksum_type": "MD5",
+      "persistent_id": "doi:10.7910/DVN/6C3JR1/Q4NOFD",
+      "id": 3031240,
+      "version_number": 1,
+      "version_state": "RELEASED",
+      "download_url": "https://dataverse.harvard.edu/api/access/datafile/3031240"
+    },
+    {
+      "label": "TEP_FaultFree_Training.RData",
+      "filename": "TEP_FaultFree_Training.RData",
+      "directory_label": null,
+      "size_bytes": 24678017,
+      "content_type": "application/x-rlang-transport",
+      "upstream_sha256": "ec126484534331f85001d8c4ebce6d17",
+      "checksum_type": "MD5",
+      "persistent_id": "doi:10.7910/DVN/6C3JR1/TMBUVJ",
+      "id": 3031241,
+      "version_number": 1,
+      "version_state": "RELEASED",
+      "download_url": "https://dataverse.harvard.edu/api/access/datafile/3031241"
+    },
+    {
+      "label": "TEP_Faulty_Testing.RData",
+      "filename": "TEP_Faulty_Testing.RData",
+      "directory_label": null,
+      "size_bytes": 836882037,
+      "content_type": "application/x-rlang-transport",
+      "upstream_sha256": "556bdb64c83021bc0c5f92e427753565",
+      "checksum_type": "MD5",
+      "persistent_id": "doi:10.7910/DVN/6C3JR1/IL0XP0",
+      "id": 3031243,
+      "version_number": 1,
+      "version_state": "RELEASED",
+      "download_url": "https://dataverse.harvard.edu/api/access/datafile/3031243"
+    },
+    {
+      "label": "TEP_Faulty_Training.RData",
+      "filename": "TEP_Faulty_Training.RData",
+      "directory_label": null,
+      "size_bytes": 494063194,
+      "content_type": "application/x-rlang-transport",
+      "upstream_sha256": "c5f594d54c47e620ff877feb58407fda",
+      "checksum_type": "MD5",
+      "persistent_id": "doi:10.7910/DVN/6C3JR1/6QOWUU",
+      "id": 3031242,
+      "version_number": 1,
+      "version_state": "RELEASED",
+      "download_url": "https://dataverse.harvard.edu/api/access/datafile/3031242"
+    }
+  ]
+}

@@ -52,6 +52,19 @@ data/cache/
 *.parquet
 *.h5
 *.pkl
+# External datasets (TEP for Phase 4 cross-domain anomaly training, etc.)
+# — bulk binaries ignored; provenance docs and small metadata kept.
+data/external/**/*.csv
+data/external/**/*.dat
+data/external/**/*.tsv
+data/external/**/*.mat
+data/external/**/*.RData
+data/external/**/*.zip
+data/external/**/*.tar
+data/external/**/*.tar.gz
+data/external/**/*.json
+!data/external/**/file_listing.json
+!data/external/**/provenance.json
 # Whitelist sweep-cache state files used by lookup_lv_ss for off-nominal
 # robustness checks and Phase-3 MPC linearizations — these are versioned
 # reference artifacts, not run outputs.
