@@ -21,11 +21,18 @@ treat both clients identically.
 
 from __future__ import annotations
 
+import os
 import random
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
+from industrial_ai.agents.errors import (
+    LLMEndpointUnreachableError,
+    LLMResponseParseError,
+    MockLLMClientMisuseError,
+)
 from industrial_ai.agents.state import SETPOINT_BOUNDS
 from industrial_ai.agents.tools import SetpointProposalInput
 
@@ -92,7 +99,16 @@ class MockLLMClient(LLMClient):
         *,
         policy: str = "nominal",
         seed: int = 0,
+        allow_mock: bool = False,
     ) -> None:
+        if not _is_sanctioned_mock_context(allow_mock):
+            raise MockLLMClientMisuseError(
+                "MockLLMClient is a test double (ADR 010 §3). "
+                "Construction outside pytest requires allow_mock=True, which is "
+                "permitted only in test code. In production / notebook / "
+                "evaluation runs, configure a real LLMClient (e.g., "
+                "LMStudioLLMClient) instead."
+            )
         if policy not in ("nominal", "adaptive"):
             raise ValueError(f"unknown mock policy: {policy!r}")
         self.policy = policy
@@ -134,9 +150,10 @@ class MockLLMClient(LLMClient):
         y_D = min(max(y_D, SETPOINT_BOUNDS["y_D_target"][0]), SETPOINT_BOUNDS["y_D_target"][1])
         x_B = min(max(x_B, SETPOINT_BOUNDS["x_B_target"][0]), SETPOINT_BOUNDS["x_B_target"][1])
 
-        # Tiny rationale jitter for non-zero seed (audit-trail variation).
-        if self._rng.random() < 0.0:  # never fires — deterministic
-            pass
+        # Reserved for future rationale-jitter via self._rng; the
+        # numeric proposal must remain deterministic per the policy
+        # contract above.
+        _ = self._rng
 
         proposal = SetpointProposalInput(
             y_D_target=y_D,
@@ -152,6 +169,25 @@ class MockLLMClient(LLMClient):
         )
 
 
+def _is_sanctioned_mock_context(allow_mock: bool) -> bool:
+    """Return ``True`` if constructing :class:`MockLLMClient` is permitted here.
+
+    Sanctioned contexts (per ADR 010 §3):
+
+    - pytest is currently active (``PYTEST_CURRENT_TEST`` env var set,
+      or the ``pytest`` module is loaded).
+    - the caller explicitly passed ``allow_mock=True``.
+
+    Anything else is treated as a production / notebook / evaluation
+    run and the mock is rejected at construction time.
+    """
+    if allow_mock:
+        return True
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        return True
+    return sys.modules.get("pytest") is not None
+
+
 def _extract_y_D_from_prompt(prompt: str) -> float | None:
     """Find ``y_D=0.XX`` in the prompt body, return the value or ``None``.
 
@@ -165,7 +201,7 @@ def _extract_y_D_from_prompt(prompt: str) -> float | None:
         return None
     try:
         return float(m.group(1))
-    except ValueError:
+    except ValueError:  # pragma: no cover - regex match guarantees a parseable float
         return None
 
 
@@ -205,7 +241,9 @@ class LMStudioLLMClient(LLMClient):
         self._client: Any | None = None
 
     def _ensure_client(self) -> Any:
-        if self._client is not None:
+        if (
+            self._client is not None
+        ):  # pragma: no cover - cached path exercised only on the second call against a live endpoint (Schritt-4 smoke check)
             return self._client
         from langchain_openai import ChatOpenAI
         from pydantic import SecretStr
@@ -232,15 +270,25 @@ class LMStudioLLMClient(LLMClient):
             ("system", system_prompt),
             ("user", user_prompt),
         ]
-        reply = client.invoke(
-            messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-        )
-        raw = reply.content if hasattr(reply, "content") else str(reply)
-        proposal = _parse_setpoint_json(raw)
-        return LLMResponse(
+        # ADR 010 §2: single attempt, named exception on network failure.
+        # No retry-until-default, no silent provider switch.
+        try:
+            reply = client.invoke(
+                messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+            )
+        except Exception as exc:
+            raise LLMEndpointUnreachableError(
+                f"LM Studio endpoint {self._cfg.base_url!r} unreachable: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        # pragma: no cover — requires a live LM Studio endpoint response,
+        # exercised by tools/phase3_llm_smoke_check.py once Schritt 4 runs.
+        raw = reply.content if hasattr(reply, "content") else str(reply)  # pragma: no cover
+        proposal = _parse_setpoint_json(raw)  # pragma: no cover
+        return LLMResponse(  # pragma: no cover
             proposal=proposal,
             raw_text=raw,
         )
@@ -259,9 +307,11 @@ def _parse_setpoint_json(text: str) -> SetpointProposalInput:
 
     match = re.search(r"\{[^{}]*\}", text, flags=re.DOTALL)
     if match is None:
-        raise ValueError(f"could not find a JSON object in LLM response: {text!r}")
+        raise LLMResponseParseError(f"could not find a JSON object in LLM response: {text!r}")
     try:
         payload = json.loads(match.group(0))
     except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid JSON in LLM response: {match.group(0)!r} ({exc})") from exc
+        raise LLMResponseParseError(
+            f"invalid JSON in LLM response: {match.group(0)!r} ({exc})"
+        ) from exc
     return SetpointProposalInput(**payload)

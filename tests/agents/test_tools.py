@@ -66,6 +66,11 @@ def test_read_recent_disturbance_rejects_empty_history() -> None:
         read_recent_disturbance(window_min=5.0, F_history=[], zF_history=[0.5])
 
 
+def test_read_recent_disturbance_rejects_non_positive_window() -> None:
+    with pytest.raises(ValueError):
+        read_recent_disturbance(window_min=0.0, F_history=[1.0], zF_history=[0.5])
+
+
 def test_setpoint_proposal_rejects_inverted_column() -> None:
     with pytest.raises(ValidationError) as exc_info:
         SetpointProposalInput(y_D_target=0.4, x_B_target=0.5, rationale="invert")

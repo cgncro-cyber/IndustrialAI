@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from industrial_ai.agents.errors import RegulatoryBackendError
 from industrial_ai.agents.regulatory_backend import (
     MPCBackend,
     PIDBackend,
@@ -43,9 +44,11 @@ def test_build_pid_backend() -> None:
     assert backend.name == "pid"
 
 
-def test_unknown_backend_kind_raises() -> None:
-    with pytest.raises(ValueError):
+def test_unknown_backend_kind_raises_named_error() -> None:
+    """ADR 010 §1: typed exception, not generic ValueError."""
+    with pytest.raises(RegulatoryBackendError) as exc_info:
         build_regulatory_backend("unknown")  # type: ignore[arg-type]
+    assert "unknown" in str(exc_info.value)
 
 
 def test_backends_satisfy_protocol() -> None:

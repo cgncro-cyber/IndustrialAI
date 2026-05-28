@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import numpy.typing as npt
 
+from industrial_ai.agents.errors import CriticLoopLimitError
 from industrial_ai.agents.llm_client import LLMClient
 from industrial_ai.agents.regulatory_backend import RegulatoryBackend, RegulatoryStepResult
 from industrial_ai.agents.state import (
@@ -278,8 +279,15 @@ def run_one_cycle(
 
     critic_feedback: str | None = None
     while True:
-        if state.optimizer_rounds >= cfg.max_critic_optimizer_rounds + 1:
-            # Hard ceiling — should be unreachable; the Critic escalates first.
+        # Hard ceiling — defensive belt-and-suspenders branch. The
+        # Critic's own budget check (see _critic_node) escalates one
+        # round earlier, so this loop guard should be unreachable in
+        # any path the Critic actually traverses. Kept as a final
+        # safety net against a future refactor that drops the Critic
+        # budget check.
+        if (
+            state.optimizer_rounds >= cfg.max_critic_optimizer_rounds + 1
+        ):  # pragma: no cover - unreachable while the Critic budget check is in place
             state.critic_verdict = CriticVerdict(
                 decision="escalate",
                 reason=f"optimizer round budget {cfg.max_critic_optimizer_rounds} exceeded",
@@ -310,7 +318,22 @@ def run_one_cycle(
         critic_feedback = verdict.reason
 
     escalated = state.critic_verdict is not None and state.critic_verdict.decision == "escalate"
-    target = state.decision if state.decision is not None else _safe_fallback_target()
+    if state.decision is None:
+        # ADR 010 §5: the documented escalate verdict re-uses the
+        # previous accepted target as a logged safe-state transition.
+        # When NO previous accepted target exists (e.g., first-ever
+        # cycle of a run with a misbehaving LLM), there is nothing
+        # safe to fall back to — substituting a default would be a
+        # silent fallback. Abort the run loudly instead.
+        raise CriticLoopLimitError(
+            "Critic loop limit reached on the first supervisor cycle with no "
+            "previous accepted proposal available; the agent has not produced "
+            "any valid setpoint yet. Inspect the LLM prompt, the policy, "
+            "and the max_critic_optimizer_rounds budget. "
+            f"optimizer_rounds={state.optimizer_rounds}, "
+            f"last_verdict={state.critic_verdict.decision if state.critic_verdict else 'none'}."
+        )
+    target = state.decision
 
     reg_result = regulatory_backend.step(
         X0=X,
@@ -330,15 +353,6 @@ def run_one_cycle(
         wall_clock_seconds=wall_end - wall_start,
         optimizer_rounds=state.optimizer_rounds,
         escalated=escalated,
-    )
-
-
-def _safe_fallback_target() -> OptimizerProposal:
-    """Last-resort accepted proposal when no previous accepted exists."""
-    return OptimizerProposal(
-        y_D_target=0.99,
-        x_B_target=0.01,
-        rationale="fallback: nominal product spec (no prior accepted proposal)",
     )
 
 

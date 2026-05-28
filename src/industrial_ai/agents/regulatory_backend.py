@@ -29,6 +29,7 @@ from typing import Literal, Protocol, runtime_checkable
 import numpy as np
 import numpy.typing as npt
 
+from industrial_ai.agents.errors import RegulatoryBackendError
 from industrial_ai.control.c0_pid_only import build_c0_pids
 from industrial_ai.control.c1_linear_mpc import (
     C1MPCConfig,
@@ -264,7 +265,9 @@ def build_regulatory_backend(
     if kind == "pid":
         return PIDBackend()
     if kind != "mpc":
-        raise ValueError(f"unknown regulatory backend kind: {kind!r}")
+        raise RegulatoryBackendError(
+            f"unknown regulatory backend kind: {kind!r} (expected 'mpc' or 'pid')"
+        )
 
     p = DEFAULT_PARAMETERS
     if X_linearization is None:

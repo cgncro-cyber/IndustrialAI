@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from industrial_ai.agents.errors import CriticLoopLimitError
 from industrial_ai.agents.graph import (
     AgentRunner,
     GraphConfig,
@@ -107,17 +108,25 @@ class _InvertingMockLLM(LLMClient):
         return LLMResponse(proposal=proposal, raw_text="bait")
 
 
-def test_inverted_proposal_triggers_revise_then_escalate(nominal_X: np.ndarray) -> None:
+def test_inverted_proposal_first_cycle_raises_critic_loop_limit(
+    nominal_X: np.ndarray,
+) -> None:
+    """ADR 010 §5: first-cycle exhaustion with no previous_accepted must crash.
+
+    The graph's escalate verdict re-uses the previous accepted target as
+    a designed safe-state transition. On the very first cycle of a run
+    there is nothing to fall back to, so substituting a default would
+    be a silent fallback. The runner raises CriticLoopLimitError
+    instead.
+    """
     bad = _InvertingMockLLM()
     cfg = GraphConfig(max_critic_optimizer_rounds=3)
-    out = _nominal_run(nominal_X, bad, config=cfg)
-    # The Critic must have asked for revise until the budget exhausted,
-    # then escalated. Optimizer calls ≤ max_critic_optimizer_rounds + 1
-    # because the post-budget verdict is escalate.
-    assert out.escalated
-    assert out.state.critic_verdict.decision == "escalate"
-    assert out.optimizer_rounds <= cfg.max_critic_optimizer_rounds + 1
-    assert bad.call_count == out.optimizer_rounds
+    with pytest.raises(CriticLoopLimitError) as exc_info:
+        _nominal_run(nominal_X, bad, config=cfg)
+    # Optimizer was actually invoked the budget number of times — i.e.
+    # the hard-limit branch fires, not some earlier guard.
+    assert "optimizer_rounds=" in str(exc_info.value)
+    assert bad.call_count >= cfg.max_critic_optimizer_rounds
 
 
 def test_escalation_falls_back_to_previous_accepted(nominal_X: np.ndarray) -> None:
@@ -179,6 +188,81 @@ def test_runner_accumulates_iae_over_cycles(nominal_X: np.ndarray) -> None:
     )
     assert runner._aggregate_iae >= iae_before
     assert runner._completed_cycles == 1
+
+
+class _OutOfBoundsYDMock(LLMClient):
+    """Always proposes y_D above 1.0 to exercise the bounds-violation escalate path."""
+
+    name = "out_of_bounds_yd"
+
+    def complete(self, **kwargs: object) -> LLMResponse:
+        return LLMResponse(
+            proposal=SetpointProposalInput.model_construct(
+                y_D_target=1.5,
+                x_B_target=0.01,
+                rationale="exceed y_D bound (bug bait)",
+            ),
+            raw_text="bait",
+        )
+
+
+class _OutOfBoundsXBMock(LLMClient):
+    """Always proposes x_B above 1.0 (with y_D below) to exercise the x_B escalate path."""
+
+    name = "out_of_bounds_xb"
+
+    def complete(self, **kwargs: object) -> LLMResponse:
+        return LLMResponse(
+            proposal=SetpointProposalInput.model_construct(
+                y_D_target=0.5,
+                x_B_target=1.5,
+                rationale="exceed x_B bound (bug bait)",
+            ),
+            raw_text="bait",
+        )
+
+
+def test_y_D_out_of_bounds_escalates_after_budget(nominal_X: np.ndarray) -> None:
+    """ADR-010-compliant: budget-exhausted bounds violation triggers CriticLoopLimitError."""
+    cfg = GraphConfig(max_critic_optimizer_rounds=2)
+    with pytest.raises(CriticLoopLimitError):
+        _nominal_run(nominal_X, _OutOfBoundsYDMock(), config=cfg)
+
+
+def test_x_B_out_of_bounds_escalates_after_budget(nominal_X: np.ndarray) -> None:
+    """Same for x_B; both Critic branches must escalate at budget."""
+    cfg = GraphConfig(max_critic_optimizer_rounds=2)
+    with pytest.raises(CriticLoopLimitError):
+        _nominal_run(nominal_X, _OutOfBoundsXBMock(), config=cfg)
+
+
+class _YDDropMock(LLMClient):
+    """Proposes a y_D well below the observed value to trigger the soft-drop revise check."""
+
+    name = "y_d_drop"
+
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    def complete(self, **kwargs: object) -> LLMResponse:
+        self.call_count += 1
+        # First proposal: drop > 0.3 (triggers Critic revise heuristic).
+        # Second proposal: stay within drop tolerance (Critic accepts).
+        y_D = 0.5 if self.call_count == 1 else 0.98
+        return LLMResponse(
+            proposal=SetpointProposalInput(y_D_target=y_D, x_B_target=0.01, rationale="t"),
+            raw_text="x",
+        )
+
+
+def test_large_y_D_drop_triggers_revise_then_recovery(nominal_X: np.ndarray) -> None:
+    """The soft 'drop > 0.3' heuristic should cause a revise, then accept on next round."""
+    mock = _YDDropMock()
+    cfg = GraphConfig(max_critic_optimizer_rounds=3)
+    out = _nominal_run(nominal_X, mock, config=cfg)
+    assert out.optimizer_rounds == 2
+    assert out.state.critic_verdict.decision == "accept"
+    assert mock.call_count == 2
 
 
 def test_adaptive_mock_proposes_interim_at_offnominal(nominal_X: np.ndarray) -> None:

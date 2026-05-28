@@ -10,6 +10,11 @@ from __future__ import annotations
 
 import pytest
 
+from industrial_ai.agents.errors import (
+    LLMEndpointUnreachableError,
+    LLMResponseParseError,
+    MockLLMClientMisuseError,
+)
 from industrial_ai.agents.llm_client import (
     LLMResponse,
     LMStudioLLMClient,
@@ -77,5 +82,70 @@ def test_parse_setpoint_json_finds_object_in_chatty_text() -> None:
 
 
 def test_parse_setpoint_json_rejects_no_object() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(LLMResponseParseError):
         _parse_setpoint_json("no JSON in here at all")
+
+
+def test_parse_setpoint_json_rejects_malformed_json() -> None:
+    with pytest.raises(LLMResponseParseError):
+        _parse_setpoint_json("{this is not valid JSON}")
+
+
+def test_mock_construction_in_pytest_is_permitted() -> None:
+    """Inside pytest, PYTEST_CURRENT_TEST is set so the mock guard passes."""
+    # Default allow_mock=False: sanctioned because pytest is active.
+    mock = MockLLMClient(policy="nominal")
+    assert mock.name == "mock"
+
+
+def test_mock_construction_outside_pytest_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ADR 010 §3: outside pytest, allow_mock=False rejects construction."""
+    import sys
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    # Hide the pytest module too so the second guard arm fails as well.
+    monkeypatch.setitem(sys.modules, "pytest", None)
+    with pytest.raises(MockLLMClientMisuseError):
+        MockLLMClient(policy="nominal")
+
+
+def test_mock_construction_outside_pytest_with_allow_mock_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR 010 §3: explicit allow_mock=True is permitted even outside pytest."""
+    import sys
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setitem(sys.modules, "pytest", None)
+    mock = MockLLMClient(policy="nominal", allow_mock=True)
+    assert mock.name == "mock"
+
+
+def test_mock_guard_pytest_module_arm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guard's second arm: env var unset but pytest module loaded → permitted."""
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    mock = MockLLMClient(policy="nominal")
+    assert mock.name == "mock"
+
+
+def test_extract_y_D_returns_none_on_unmatched_prompt() -> None:
+    """The adaptive policy falls through to nominal when the prompt has no y_D."""
+    from industrial_ai.agents.llm_client import _extract_y_D_from_prompt
+
+    assert _extract_y_D_from_prompt("no signal in this prompt") is None
+
+
+def test_lm_studio_client_against_dead_endpoint_raises_named_error() -> None:
+    """ADR 010 §2: a single connection attempt, then a named exception.
+
+    Uses a port that has no listener (RFC-5737 documentation address is
+    routed-but-no-service in most environments). The client must raise
+    LLMEndpointUnreachableError, not hang and not silently degrade.
+    """
+    client = LMStudioLLMClient(
+        base_url="http://192.0.2.1:65535/v1",
+        request_timeout_s=2.0,
+    )
+    with pytest.raises(LLMEndpointUnreachableError) as exc_info:
+        client.complete(system_prompt="sys", user_prompt="user")
+    assert "192.0.2.1:65535" in str(exc_info.value)
