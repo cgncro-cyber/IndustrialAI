@@ -86,6 +86,7 @@ ignore = [
 "src/industrial_ai/twin/**" = ["N802", "N803", "N806", "N815"]
 "src/industrial_ai/control/**" = ["N802", "N803", "N806", "N815"]
 "src/industrial_ai/evaluation/**" = ["N802", "N803", "N806", "N815"]
+"src/industrial_ai/agents/**" = ["N802", "N803", "N806", "N815"]
 # Skogestad notation (y_D, x_B, .F, ...) triggers SIM300 "Yoda" because uppercase
 # attribute reads look like constants to ruff's syntactic heuristic. Exempt the
 # notation-heavy areas; the readability cost would otherwise outweigh the rule.
