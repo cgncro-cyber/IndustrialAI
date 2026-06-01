@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import time
 from datetime import UTC, datetime
@@ -52,18 +53,31 @@ _SS_FIXTURE = _REPO_ROOT / "data" / "reference" / "skogestad_column_a_steady_sta
 _SCENARIO = "nominal_baseline"
 
 
-def _default_output_path(seed: int, backend: str) -> Path:
-    """Disambiguate NIM vs Mac-Studio runs in the audit trail (ADR 011)."""
+def _model_slug(model_identifier: str) -> str:
+    """Last segment of the model identifier, lower-case, fs-safe.
+
+    Examples
+    --------
+    >>> _model_slug("nvidia/llama-3.3-nemotron-super-49b-v1.5")
+    'llama-3.3-nemotron-super-49b-v1.5'
+    >>> _model_slug("deepseek-ai/deepseek-v4-flash")
+    'deepseek-v4-flash'
+    """
+    return model_identifier.rsplit("/", 1)[-1].lower()
+
+
+def _default_output_path(seed: int, backend: str, model_identifier: str | None) -> Path:
+    """Disambiguate NIM vs Mac-Studio AND per-model runs in the audit trail.
+
+    Path shape per ADR 011 / 012::
+
+        data/runs/c2_smoke/{scenario}/seed{seed}_{backend}_{model_slug}/smoke.json
+    """
     backend_slug = backend.replace("-", "_")
-    return (
-        _REPO_ROOT
-        / "data"
-        / "runs"
-        / "c2_smoke"
-        / _SCENARIO
-        / f"seed{seed}_{backend_slug}"
-        / "smoke.json"
-    )
+    leaf = f"seed{seed}_{backend_slug}"
+    if model_identifier:
+        leaf = f"{leaf}_{_model_slug(model_identifier)}"
+    return _REPO_ROOT / "data" / "runs" / "c2_smoke" / _SCENARIO / leaf / "smoke.json"
 
 
 def _git_sha() -> str:
@@ -94,21 +108,26 @@ def main() -> int:
         "local mlx_lm.server stack retained as the Phase-5 ablation host.",
     )
     parser.add_argument(
+        "--nim-model",
+        default=None,
+        help="Override NVIDIA_MODEL env var for this run. Useful for the "
+        "ADR-011/012 multi-model comparison without editing .env. "
+        "Has no effect on --backend mac-studio.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
         help="Output JSON path; defaults to "
-        "data/runs/c2_smoke/<scenario>/seed<seed>_<backend>/smoke.json.",
+        "data/runs/c2_smoke/<scenario>/seed<seed>_<backend>_<model_slug>/smoke.json.",
     )
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    output_path = (
-        args.output if args.output is not None else _default_output_path(args.seed, args.backend)
-    )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    p = DEFAULT_PARAMETERS
-    NT = p.NT
+    # Per ADR 011 the --nim-model override is a per-run knob; threading
+    # it through the .env layer keeps build_llm_client's contract clean.
+    if args.nim_model and args.backend == "nim":
+        os.environ["NVIDIA_MODEL"] = args.nim_model
 
     # ADR 011: factory selects the right client per backend; the
     # transport's seed-thread-through differs (NIM body `seed`, MLX
@@ -117,7 +136,30 @@ def main() -> int:
     endpoint = getattr(llm, "base_url", None) or getattr(
         getattr(llm, "_cfg", None), "base_url", "?"
     )
+    model_for_path = getattr(llm, "model", None) or getattr(
+        getattr(llm, "_cfg", None), "model", None
+    )
+    output_path = (
+        args.output
+        if args.output is not None
+        else _default_output_path(args.seed, args.backend, model_for_path)
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    p = DEFAULT_PARAMETERS
+    NT = p.NT
     model_name = getattr(llm, "model", None) or getattr(getattr(llm, "_cfg", None), "model", "?")
+    # Protocol metadata for the smoke audit block. Only OpenAIChatLLMClient
+    # carries a reasoning_protocol; MLXServerLLMClient stays on the legacy
+    # marker-only contract.
+    reasoning_protocol_obj = getattr(llm, "reasoning_protocol", None)
+    reasoning_protocol_name = (
+        getattr(reasoning_protocol_obj, "name", None) if reasoning_protocol_obj else "marker_only"
+    )
+    client_temperature = getattr(llm, "temperature", None)
+    client_top_p = getattr(llm, "top_p", None)
+    effective_max_tokens = (
+        reasoning_protocol_obj.max_tokens_for(reasoning=False) if reasoning_protocol_obj else None
+    )
 
     print(
         f"=== C2 smoke — {_SCENARIO}, backend={args.backend}, "
@@ -125,6 +167,7 @@ def main() -> int:
     )
     print(f"endpoint: {endpoint}")
     print(f"model:    {model_name}")
+    print(f"protocol: {reasoning_protocol_name}")
     print(f"output:   {output_path}")
     print(f"git_sha:  {_git_sha()}")
     # nominal_baseline has no disturbance — canonical kpis.md §1.1
@@ -213,6 +256,8 @@ def main() -> int:
                 "escalated": out.escalated,
                 "regulatory_simulation_success": out.regulatory_result.simulation.success,
                 "rationale": rationale,
+                "reasoning_content": out.reasoning_content,
+                "model_identifier": model_name,
                 "prompt_tokens": out.prompt_tokens,
                 "completion_tokens": out.completion_tokens,
                 "total_tokens": out.prompt_tokens + out.completion_tokens,
@@ -245,7 +290,7 @@ def main() -> int:
     )
 
     payload: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at_utc": datetime.now(tz=UTC).isoformat(),
         "git_sha": _git_sha(),
         "config": {
@@ -257,6 +302,12 @@ def main() -> int:
             "backend": args.backend,
             "base_url": endpoint,
             "model": model_name,
+            "model_identifier": model_name,
+            "reasoning_protocol": reasoning_protocol_name,
+            "reasoning_mode": "off",
+            "temperature": client_temperature,
+            "top_p": client_top_p,
+            "max_tokens": effective_max_tokens,
             "regulatory_backend": "mpc",
             "F_kmol_per_min": p.nominal_feed_F_kmol_per_min,
             "zF": 0.5,
