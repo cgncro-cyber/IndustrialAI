@@ -22,6 +22,7 @@ __all__ = [
     "MissingUsageError",
     "MockLLMClientMisuseError",
     "RegulatoryBackendError",
+    "UnknownReasoningProtocolError",
 ]
 
 
@@ -102,6 +103,18 @@ class MissingAPIKeyError(AgentError):
     construction time rather than letting the first network call
     fail with a generic 401 — the operator sees the configuration
     bug at startup.
+    """
+
+
+class UnknownReasoningProtocolError(AgentError):
+    """No :class:`ReasoningProtocol` is registered for the requested model identifier.
+
+    Raised by :func:`build_llm_client` when the model prefix does not
+    match any entry in ``_PROTOCOL_REGISTRY``. Per ADR 010 §2, an
+    unknown identifier is a configuration error rather than a silent
+    default to a marker-style protocol — different reasoning
+    families have different on/off conventions and a silent default
+    would produce wrong-shaped requests against a wrong-shaped API.
     """
 
 

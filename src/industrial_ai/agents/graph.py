@@ -93,6 +93,15 @@ class CycleOutcome:
     information (e.g. a future fixture) sets ``prompt_tokens`` /
     ``completion_tokens`` on the ``LLMResponse`` to ``None`` and the
     accumulator treats that as zero for the cycle.
+
+    ``reasoning_content`` is the separate reasoning trace from the LAST
+    Optimizer LLM call in the cycle (the one that produced the
+    accepted proposal, or the final attempt before escalation). It is
+    ``None`` for clients whose protocol does not emit a separate
+    reasoning trace (NemotronMarkerProtocol, MockLLMClient,
+    MLXServerLLMClient); on the extra-body reasoning protocols it
+    carries the model's chain-of-thought for audit and prompt-iteration
+    debugging.
     """
 
     state: AgentState
@@ -102,6 +111,7 @@ class CycleOutcome:
     escalated: bool
     prompt_tokens: int
     completion_tokens: int
+    reasoning_content: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +162,7 @@ def _optimizer_node(
     llm_client: LLMClient,
     system_prompt: str,
     critic_feedback: str | None = None,
-) -> tuple[OptimizerProposal, int, int]:
+) -> tuple[OptimizerProposal, int, int, str | None]:
     """Call the LLM to propose a ``(y_D_target, x_B_target)`` pair.
 
     Builds a structured user prompt from the Observer report; if a
@@ -194,7 +204,7 @@ def _optimizer_node(
     # server itself fails to return a `usage` block (ADR 010 §2).
     prompt_tokens = reply.prompt_tokens or 0
     completion_tokens = reply.completion_tokens or 0
-    return proposal, prompt_tokens, completion_tokens
+    return proposal, prompt_tokens, completion_tokens, reply.reasoning_content
 
 
 def _critic_node(
@@ -316,6 +326,7 @@ def run_one_cycle(
     critic_feedback: str | None = None
     prompt_tokens_total = 0
     completion_tokens_total = 0
+    last_reasoning_content: str | None = None
     while True:
         # Hard ceiling — defensive belt-and-suspenders branch. The
         # Critic's own budget check (see _critic_node) escalates one
@@ -331,14 +342,17 @@ def run_one_cycle(
                 reason=f"optimizer round budget {cfg.max_critic_optimizer_rounds} exceeded",
             )
             break
-        proposal, call_prompt_tokens, call_completion_tokens = _optimizer_node(
-            observer_report=state.observer_report,
-            llm_client=llm_client,
-            system_prompt=cfg.system_prompt,
-            critic_feedback=critic_feedback,
+        proposal, call_prompt_tokens, call_completion_tokens, call_reasoning_content = (
+            _optimizer_node(
+                observer_report=state.observer_report,
+                llm_client=llm_client,
+                system_prompt=cfg.system_prompt,
+                critic_feedback=critic_feedback,
+            )
         )
         prompt_tokens_total += call_prompt_tokens
         completion_tokens_total += call_completion_tokens
+        last_reasoning_content = call_reasoning_content
         state.optimizer_proposal = proposal
         state.optimizer_rounds += 1
         verdict = _critic_node(
@@ -395,6 +409,7 @@ def run_one_cycle(
         escalated=escalated,
         prompt_tokens=prompt_tokens_total,
         completion_tokens=completion_tokens_total,
+        reasoning_content=last_reasoning_content,
     )
 
 

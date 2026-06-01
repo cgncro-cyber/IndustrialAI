@@ -25,8 +25,9 @@ import os
 import random
 import sys
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from industrial_ai.agents.errors import (
     LLMEndpointUnreachableError,
@@ -37,17 +38,22 @@ from industrial_ai.agents.errors import (
     MissingBackendConfigError,
     MissingUsageError,
     MockLLMClientMisuseError,
+    UnknownReasoningProtocolError,
 )
 from industrial_ai.agents.state import SETPOINT_BOUNDS
 from industrial_ai.agents.tools import SetpointProposalInput
 
 __all__ = [
+    "DeepSeekExtraBodyProtocol",
     "LLMClient",
     "LLMResponse",
     "LMStudioLLMClient",
     "MLXServerLLMClient",
     "MockLLMClient",
+    "NemotronExtraBodyProtocol",
+    "NemotronMarkerProtocol",
     "OpenAIChatLLMClient",
+    "ReasoningProtocol",
     "build_llm_client",
 ]
 
@@ -56,12 +62,20 @@ _DEFAULT_NOMINAL_TARGETS = {"y_D_target": 0.99, "x_B_target": 0.01}
 
 @dataclass(slots=True)
 class LLMResponse:
-    """One LLM call's full result: parsed proposal + raw assistant text + token metrics."""
+    """One LLM call's full result: parsed proposal + raw assistant text + token metrics.
+
+    ``reasoning_content`` carries any separate reasoning trace emitted by
+    reasoning-capable models (Nemotron-3-Super-120B's ``reasoning_content``,
+    DeepSeek-V4-Flash's ``reasoning`` / ``reasoning_content``). The
+    Nemotron-49B path inlines its rationale in the JSON output and emits no
+    separate trace, so ``reasoning_content`` is ``None`` on that path.
+    """
 
     proposal: SetpointProposalInput
     raw_text: str
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    reasoning_content: str | None = None
 
 
 class LLMClient(ABC):
@@ -539,6 +553,158 @@ class MLXServerLLMClient(LLMClient):
 
 
 # ---------------------------------------------------------------------------
+# Reasoning protocols (ADR 011 / 012). One strategy per model family.
+# ---------------------------------------------------------------------------
+
+
+class ReasoningProtocol(Protocol):
+    """How a reasoning-capable model toggles its reasoning mode.
+
+    Different families expose different conventions: Nemotron-Super-49B-v1.5
+    uses the ``/no_think`` system-prompt marker (ADR 005 amendment);
+    Nemotron-3-Super-120B and DeepSeek-V4 use ``extra_body`` flags
+    consumed by the chat template server-side. The protocol object is
+    constructed once per :class:`OpenAIChatLLMClient` and applied per
+    request.
+
+    A protocol also owns its ``max_tokens`` budget: marker-style models
+    need 512/4096 for non-reasoning / reasoning, extra-body reasoning
+    models need 8192 to leave headroom for the trace plus the JSON
+    answer.
+    """
+
+    def apply_to_system_prompt(self, system_prompt: str, reasoning: bool) -> str:
+        """Return the system content the API should see, possibly with a marker."""
+        ...
+
+    def apply_to_extra_body(self, reasoning: bool) -> dict[str, Any] | None:
+        """Return vendor-specific extras merged into the request body, or ``None``."""
+        ...
+
+    def extract_reasoning_content(self, message: dict[str, Any]) -> str | None:
+        """Return any separate reasoning trace from the response message, or ``None``."""
+        ...
+
+    def max_tokens_for(self, reasoning: bool) -> int:
+        """Return the default ``max_tokens`` budget for this protocol + mode."""
+        ...
+
+    @property
+    def default_temperature(self) -> float:
+        """Return the per-protocol default temperature (per NIM's catalog hints)."""
+        ...
+
+    @property
+    def name(self) -> str:
+        """Short identifier used in smoke output for audit."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class NemotronMarkerProtocol:
+    """ADR 005 ``/no_think`` marker style — Nemotron-Super-49B-v1.5."""
+
+    name: str = "nemotron_marker"
+    default_temperature: float = 0.6
+
+    def apply_to_system_prompt(self, system_prompt: str, reasoning: bool) -> str:
+        if reasoning:
+            return system_prompt
+        return "/no_think " + system_prompt
+
+    def apply_to_extra_body(self, reasoning: bool) -> dict[str, Any] | None:
+        return None
+
+    def extract_reasoning_content(self, message: dict[str, Any]) -> str | None:
+        # 49B does not emit a separate reasoning field — its rationale
+        # is inlined in the JSON output.
+        return None
+
+    def max_tokens_for(self, reasoning: bool) -> int:
+        return 4096 if reasoning else 512
+
+
+@dataclass(frozen=True, slots=True)
+class NemotronExtraBodyProtocol:
+    """``extra_body`` style — Nemotron-3-Super-120B-A12B.
+
+    Per NIM's catalog snippet 2026-06-01::
+
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_budget": 16384,
+        }
+
+    Reasoning is opted into per request via ``enable_thinking``;
+    ``reasoning_budget`` caps the number of trace tokens before the
+    model must emit the JSON answer. Default ``reasoning_budget=4096``
+    matches the prompt's specification.
+    """
+
+    reasoning_budget: int = 4096
+    name: str = "nemotron_extra_body"
+    default_temperature: float = 1.0
+
+    def apply_to_system_prompt(self, system_prompt: str, reasoning: bool) -> str:
+        return system_prompt
+
+    def apply_to_extra_body(self, reasoning: bool) -> dict[str, Any] | None:
+        return {
+            "chat_template_kwargs": {"enable_thinking": reasoning},
+            "reasoning_budget": self.reasoning_budget if reasoning else 0,
+        }
+
+    def extract_reasoning_content(self, message: dict[str, Any]) -> str | None:
+        return message.get("reasoning_content")
+
+    def max_tokens_for(self, reasoning: bool) -> int:
+        return 8192
+
+
+@dataclass(frozen=True, slots=True)
+class DeepSeekExtraBodyProtocol:
+    """``extra_body`` style — DeepSeek-V4-Flash (ADR 012 ablation family).
+
+    Per NIM's catalog snippet 2026-06-01::
+
+        extra_body={
+            "chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"},
+        }
+
+    DeepSeek's response carries the trace as either ``reasoning`` or
+    ``reasoning_content``; we check both per the catalog snippet.
+    """
+
+    reasoning_effort: str = "high"
+    name: str = "deepseek_extra_body"
+    default_temperature: float = 1.0
+
+    def apply_to_system_prompt(self, system_prompt: str, reasoning: bool) -> str:
+        return system_prompt
+
+    def apply_to_extra_body(self, reasoning: bool) -> dict[str, Any] | None:
+        if reasoning:
+            return {
+                "chat_template_kwargs": {
+                    "thinking": True,
+                    "reasoning_effort": self.reasoning_effort,
+                }
+            }
+        return {"chat_template_kwargs": {"thinking": False}}
+
+    def extract_reasoning_content(self, message: dict[str, Any]) -> str | None:
+        # DeepSeek snippet checks both field names.
+        value: object = message.get("reasoning")
+        if isinstance(value, str):
+            return value
+        fallback: object = message.get("reasoning_content")
+        return fallback if isinstance(fallback, str) else None
+
+    def max_tokens_for(self, reasoning: bool) -> int:
+        return 8192
+
+
+# ---------------------------------------------------------------------------
 # OpenAI-Chat-API backend (ADR 011, NIM primary).
 # ---------------------------------------------------------------------------
 
@@ -547,18 +713,20 @@ class MLXServerLLMClient(LLMClient):
 class OpenAIChatLLMClient(LLMClient):
     """Standard OpenAI ``/v1/chat/completions`` transport, used against NIM.
 
-    Per ADR 011, this is the Phase-3 primary inference path.
-    Server-side chat-template rendering (no client-side jinja2
-    render, unlike :class:`MLXServerLLMClient`) — the vLLM backend
-    on NIM correctly handles Nemotron's chat template, so we just
-    POST a ``messages`` array and receive parsed assistant content.
+    Per ADR 011, this is the Phase-3 primary inference path; per
+    ADR 012, the same client supports the DeepSeek-V4 ablation
+    family. Reasoning-mode toggling is delegated to a
+    :class:`ReasoningProtocol` strategy so each model family's
+    native convention (marker vs ``extra_body`` flags) is applied
+    without polluting the transport surface.
 
-    The ``reasoning`` modal convention follows ADR 005 amendment:
-    ``reasoning=False`` prefixes the system content with
-    ``/no_think`` (Nemotron's chat template detects it and stubs
-    the ``<think></think>`` block) and uses a ~512-token budget;
-    ``reasoning=True`` omits the marker and raises the budget to
-    4096.
+    Server-side chat-template rendering (no client-side jinja2
+    render, unlike :class:`MLXServerLLMClient`) — NIM's vLLM
+    backend handles each family's chat template correctly, so we
+    just POST a ``messages`` array plus optional ``extra_body``
+    extras and receive parsed assistant content (plus an optional
+    separate ``reasoning_content`` field for reasoning-capable
+    models).
 
     ADR 010 §2: single attempt, no retry. Named errors:
 
@@ -567,7 +735,8 @@ class OpenAIChatLLMClient(LLMClient):
     - :class:`LLMServerError` on non-2xx HTTP responses
       (includes status code and body excerpt).
     - :class:`LLMResponseFormatError` when the response body is
-      not parseable as JSON.
+      not parseable as JSON, or when ``choices[0].message.content``
+      is missing.
     - :class:`LLMEndpointUnreachableError` on connection / timeout
       failures (httpx-level transport errors).
     - :class:`MissingUsageError` if the response is missing the
@@ -579,6 +748,9 @@ class OpenAIChatLLMClient(LLMClient):
     base_url: str
     api_key: str
     model: str
+    reasoning_protocol: ReasoningProtocol
+    temperature: float = 0.6
+    top_p: float = 0.95
     request_timeout_s: float = 180.0
     seed: int | None = None
     name: str = "openai_chat"
@@ -601,25 +773,37 @@ class OpenAIChatLLMClient(LLMClient):
         top_p: float = 0.95,
         reasoning: bool = False,
     ) -> LLMResponse:
-        # Modal reasoning convention per ADR 005 amendment 2026-05-28,
-        # preserved across backends (Nemotron honors the marker
-        # server-side because the chat template is the same).
-        if reasoning:
-            effective_system_content = system_prompt
-            effective_max_tokens = max_tokens if max_tokens is not None else 4096
-        else:
-            effective_system_content = "/no_think " + system_prompt
-            effective_max_tokens = max_tokens if max_tokens is not None else 512
+        # Modal reasoning convention is delegated to the protocol; the
+        # `temperature` / `top_p` arguments here are kept for protocol-
+        # signature compatibility with LLMClient.complete but the per-
+        # request values come from the protocol-aware construction
+        # defaults (self.temperature / self.top_p) so a smoke run sees
+        # the canonical NIM-catalog sampling per model family.
+        del temperature, top_p
+        effective_system_content = self.reasoning_protocol.apply_to_system_prompt(
+            system_prompt, reasoning
+        )
+        effective_max_tokens = (
+            max_tokens
+            if max_tokens is not None
+            else self.reasoning_protocol.max_tokens_for(reasoning)
+        )
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": effective_system_content},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": temperature,
-            "top_p": top_p,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
             "max_tokens": effective_max_tokens,
         }
+        extra_body = self.reasoning_protocol.apply_to_extra_body(reasoning)
+        if extra_body is not None:
+            # extra_body fields go at the top level of the request body
+            # for vLLM-backed servers — chat_template_kwargs and
+            # reasoning_budget are consumed at the server side.
+            payload.update(extra_body)
         if self.seed is not None:
             payload["seed"] = self.seed
         headers = {
@@ -654,7 +838,8 @@ class OpenAIChatLLMClient(LLMClient):
                 f"non-JSON body: {response.text[:300]!r}"
             ) from exc
         try:
-            content = response_json["choices"][0]["message"]["content"]
+            message = response_json["choices"][0]["message"]
+            content = message["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMResponseFormatError(
                 f"OpenAI-Chat-API response from {self.base_url!r} missing "
@@ -675,12 +860,14 @@ class OpenAIChatLLMClient(LLMClient):
                 f"prompt_tokens={prompt_tokens!r}, "
                 f"completion_tokens={completion_tokens!r}."
             )
+        reasoning_content = self.reasoning_protocol.extract_reasoning_content(message)
         proposal = _parse_setpoint_json(content)
         return LLMResponse(
             proposal=proposal,
             raw_text=content,
             prompt_tokens=int(prompt_tokens),
             completion_tokens=int(completion_tokens),
+            reasoning_content=reasoning_content,
         )
 
     def _post(self, url: str, payload: dict[str, Any], headers: dict[str, str]) -> Any:
@@ -694,6 +881,30 @@ class OpenAIChatLLMClient(LLMClient):
 # ---------------------------------------------------------------------------
 # Backend factory (ADR 011).
 # ---------------------------------------------------------------------------
+
+
+#: Model-identifier prefix → no-argument :class:`ReasoningProtocol` factory.
+#: Match-by-startswith. Adding a new model family means one new entry
+#: here plus a new ReasoningProtocol implementation above. The value type
+#: is the no-arg constructor of each concrete protocol class — all three
+#: have ``__init__(self) -> None`` defaults so the call site is uniform.
+_PROTOCOL_REGISTRY: dict[str, Callable[[], ReasoningProtocol]] = {
+    "nvidia/llama-3.3-nemotron-super-": NemotronMarkerProtocol,
+    "nvidia/nemotron-3-super-": NemotronExtraBodyProtocol,
+    "deepseek-ai/deepseek-v4-": DeepSeekExtraBodyProtocol,
+}
+
+
+def _resolve_reasoning_protocol(model: str) -> ReasoningProtocol:
+    for prefix, factory in _PROTOCOL_REGISTRY.items():
+        if model.startswith(prefix):
+            return factory()
+    raise UnknownReasoningProtocolError(
+        f"no ReasoningProtocol is registered for model {model!r}. "
+        f"Known prefixes: {sorted(_PROTOCOL_REGISTRY.keys())!r}. "
+        "Add an entry to _PROTOCOL_REGISTRY (and a ReasoningProtocol "
+        "implementation if the model family is new) per ADR 011."
+    )
 
 
 def build_llm_client(backend: str, *, seed: int | None = None) -> LLMClient:
@@ -733,10 +944,14 @@ def build_llm_client(backend: str, *, seed: int | None = None) -> LLMClient:
                 f"following are missing or empty: {missing!r}. Populate "
                 "them in .env (project root) per ADR 011."
             )
+        model = os.environ["NVIDIA_MODEL"]
+        protocol = _resolve_reasoning_protocol(model)
         return OpenAIChatLLMClient(
             base_url=os.environ["NVIDIA_BASE_URL"],
             api_key=os.environ["NVIDIA_API_KEY"],
-            model=os.environ["NVIDIA_MODEL"],
+            model=model,
+            reasoning_protocol=protocol,
+            temperature=protocol.default_temperature,
             seed=seed,
         )
     if backend == "mac-studio":

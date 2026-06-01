@@ -23,6 +23,7 @@ from industrial_ai.agents.llm_client import (
     LMStudioLLMClient,
     MLXServerLLMClient,
     MockLLMClient,
+    ReasoningProtocol,
     _load_jinja_template,
     _parse_setpoint_json,
 )
@@ -423,11 +424,21 @@ class _StubResponseOK:
         }
 
 
-def _build_openai_client_with_stub(stub_response: object) -> OpenAIChatLLMClient:
+def _build_openai_client_with_stub(
+    stub_response: object,
+    *,
+    reasoning_protocol: ReasoningProtocol | None = None,
+    model: str = "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+) -> OpenAIChatLLMClient:
+    from industrial_ai.agents.llm_client import NemotronMarkerProtocol
+
+    protocol: ReasoningProtocol = reasoning_protocol or NemotronMarkerProtocol()
     client = OpenAIChatLLMClient(
         base_url="https://fake.invalid/v1",
         api_key="nvapi-test",
-        model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        model=model,
+        reasoning_protocol=protocol,
+        temperature=protocol.default_temperature,
     )
     captured: dict[str, object] = {}
 
@@ -444,8 +455,15 @@ def _build_openai_client_with_stub(stub_response: object) -> OpenAIChatLLMClient
 
 def test_openai_client_requires_api_key() -> None:
     """ADR 010 §2: empty api_key is fail-fast at construction."""
+    from industrial_ai.agents.llm_client import NemotronMarkerProtocol
+
     with pytest.raises(MissingAPIKeyError):
-        OpenAIChatLLMClient(base_url="https://x/v1", api_key="", model="m")
+        OpenAIChatLLMClient(
+            base_url="https://x/v1",
+            api_key="",
+            model="m",
+            reasoning_protocol=NemotronMarkerProtocol(),
+        )
 
 
 def test_openai_client_happy_path_parses_setpoint_and_usage() -> None:
@@ -485,7 +503,15 @@ def test_openai_client_omits_no_think_marker_on_reasoning_true() -> None:
 
 
 def test_openai_client_threads_seed_into_payload() -> None:
-    client = OpenAIChatLLMClient(base_url="https://x/v1", api_key="k", model="m", seed=42)
+    from industrial_ai.agents.llm_client import NemotronMarkerProtocol
+
+    client = OpenAIChatLLMClient(
+        base_url="https://x/v1",
+        api_key="k",
+        model="m",
+        reasoning_protocol=NemotronMarkerProtocol(),
+        seed=42,
+    )
     captured: dict[str, object] = {}
     client._post = lambda url, payload, headers: (  # type: ignore[assignment]
         captured.update({"payload": payload}) or _StubResponseOK()
@@ -571,25 +597,248 @@ def test_openai_client_raises_format_error_when_choices_missing() -> None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# ReasoningProtocol strategies (ADR 011/012)
+# ---------------------------------------------------------------------------
+
+
+def test_nemotron_marker_protocol_injects_no_think_only_when_reasoning_off() -> None:
+    from industrial_ai.agents.llm_client import NemotronMarkerProtocol
+
+    p = NemotronMarkerProtocol()
+    assert p.apply_to_system_prompt("SYS", reasoning=False).startswith("/no_think ")
+    assert p.apply_to_system_prompt("SYS", reasoning=True) == "SYS"
+    assert p.apply_to_extra_body(reasoning=False) is None
+    assert p.apply_to_extra_body(reasoning=True) is None
+    assert p.extract_reasoning_content({"content": "x"}) is None
+    assert p.extract_reasoning_content({"content": "x", "reasoning_content": "y"}) is None
+    assert p.max_tokens_for(reasoning=False) == 512
+    assert p.max_tokens_for(reasoning=True) == 4096
+    assert p.default_temperature == pytest.approx(0.6)
+
+
+def test_nemotron_extra_body_protocol_emits_chat_template_kwargs() -> None:
+    from industrial_ai.agents.llm_client import NemotronExtraBodyProtocol
+
+    p = NemotronExtraBodyProtocol(reasoning_budget=4096)
+    # System prompt is API-modal, not marker-modal.
+    assert p.apply_to_system_prompt("SYS", reasoning=False) == "SYS"
+    assert p.apply_to_system_prompt("SYS", reasoning=True) == "SYS"
+    # extra_body always present, reasoning_budget is 0 when off.
+    off = p.apply_to_extra_body(reasoning=False)
+    assert off == {
+        "chat_template_kwargs": {"enable_thinking": False},
+        "reasoning_budget": 0,
+    }
+    on = p.apply_to_extra_body(reasoning=True)
+    assert on == {
+        "chat_template_kwargs": {"enable_thinking": True},
+        "reasoning_budget": 4096,
+    }
+    # Reasoning trace comes back as reasoning_content.
+    assert p.extract_reasoning_content({"reasoning_content": "trace"}) == "trace"
+    assert p.extract_reasoning_content({"content": "x"}) is None
+    assert p.max_tokens_for(reasoning=False) == 8192
+    assert p.max_tokens_for(reasoning=True) == 8192
+    assert p.default_temperature == pytest.approx(1.0)
+
+
+def test_nemotron_extra_body_protocol_respects_reasoning_budget_override() -> None:
+    from industrial_ai.agents.llm_client import NemotronExtraBodyProtocol
+
+    p = NemotronExtraBodyProtocol(reasoning_budget=16384)
+    on = p.apply_to_extra_body(reasoning=True)
+    assert on["reasoning_budget"] == 16384
+
+
+def test_deepseek_extra_body_protocol_uses_thinking_and_reasoning_effort() -> None:
+    from industrial_ai.agents.llm_client import DeepSeekExtraBodyProtocol
+
+    p = DeepSeekExtraBodyProtocol(reasoning_effort="high")
+    assert p.apply_to_system_prompt("SYS", reasoning=False) == "SYS"
+    assert p.apply_to_system_prompt("SYS", reasoning=True) == "SYS"
+    off = p.apply_to_extra_body(reasoning=False)
+    assert off == {"chat_template_kwargs": {"thinking": False}}
+    on = p.apply_to_extra_body(reasoning=True)
+    assert on == {"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}}
+    # Trace may be on `reasoning` or `reasoning_content`; check both.
+    assert p.extract_reasoning_content({"reasoning": "trace1"}) == "trace1"
+    assert p.extract_reasoning_content({"reasoning_content": "trace2"}) == "trace2"
+    # `reasoning` takes precedence when both present (DeepSeek snippet order).
+    assert (
+        p.extract_reasoning_content({"reasoning": "primary", "reasoning_content": "secondary"})
+        == "primary"
+    )
+    assert p.extract_reasoning_content({}) is None
+    assert p.max_tokens_for(reasoning=False) == 8192
+    assert p.max_tokens_for(reasoning=True) == 8192
+    assert p.default_temperature == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# OpenAIChatLLMClient with each protocol — mock-based assertions on the
+# wire-shape of the request.
+# ---------------------------------------------------------------------------
+
+
+class _StubResponseWithReasoningContent:
+    status_code = 200
+    text = ""
+
+    def json(self) -> dict[str, object]:
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"y_D_target": 0.99, "x_B_target": 0.01, "rationale": "ok"}',
+                        "reasoning_content": "step 1: hold. step 2: target = current.",
+                    }
+                }
+            ],
+            "usage": {"prompt_tokens": 211, "completion_tokens": 47, "total_tokens": 258},
+        }
+
+
+def test_openai_client_with_nemotron_extra_body_merges_chat_template_kwargs() -> None:
+    from industrial_ai.agents.llm_client import NemotronExtraBodyProtocol
+
+    client = _build_openai_client_with_stub(
+        _StubResponseWithReasoningContent(),
+        reasoning_protocol=NemotronExtraBodyProtocol(reasoning_budget=4096),
+        model="nvidia/nemotron-3-super-120b-a12b",
+    )
+    resp = client.complete(system_prompt="SYS", user_prompt="usr", reasoning=True)
+    captured = client._last_captured  # type: ignore[attr-defined]
+    payload = captured["payload"]
+    # System content not marker-modified.
+    assert payload["messages"][0]["content"] == "SYS"
+    # extra_body fields merged at top level.
+    assert payload["chat_template_kwargs"] == {"enable_thinking": True}
+    assert payload["reasoning_budget"] == 4096
+    # max_tokens from protocol default 8192.
+    assert payload["max_tokens"] == 8192
+    # reasoning_content surfaced on the LLMResponse.
+    assert resp.reasoning_content is not None
+    assert "step 1" in resp.reasoning_content
+
+
+def test_openai_client_with_deepseek_protocol_emits_thinking_off_when_reasoning_false() -> None:
+    from industrial_ai.agents.llm_client import DeepSeekExtraBodyProtocol
+
+    client = _build_openai_client_with_stub(
+        _StubResponseOK(),
+        reasoning_protocol=DeepSeekExtraBodyProtocol(),
+        model="deepseek-ai/deepseek-v4-flash",
+    )
+    client.complete(system_prompt="SYS", user_prompt="usr", reasoning=False)
+    captured = client._last_captured  # type: ignore[attr-defined]
+    payload = captured["payload"]
+    assert payload["chat_template_kwargs"] == {"thinking": False}
+    assert "reasoning_effort" not in payload["chat_template_kwargs"]
+
+
+def test_openai_client_reasoning_content_none_for_marker_protocol() -> None:
+    """NemotronMarkerProtocol always returns None for reasoning_content."""
+    client = _build_openai_client_with_stub(_StubResponseWithReasoningContent())
+    resp = client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    assert resp.reasoning_content is None
+
+
+def test_openai_client_emits_per_protocol_temperature() -> None:
+    from industrial_ai.agents.llm_client import NemotronExtraBodyProtocol
+
+    client = _build_openai_client_with_stub(
+        _StubResponseOK(),
+        reasoning_protocol=NemotronExtraBodyProtocol(),
+        model="nvidia/nemotron-3-super-120b-a12b",
+    )
+    client.complete(system_prompt="sys", user_prompt="usr", reasoning=True)
+    captured = client._last_captured  # type: ignore[attr-defined]
+    # The 120B-default temperature is 1.0, threaded through __init__ via
+    # the helper. Sanity-check the wire value.
+    assert captured["payload"]["temperature"] == pytest.approx(1.0)
+
+
 def test_build_llm_client_rejects_unknown_backend() -> None:
     with pytest.raises(ValueError):
         build_llm_client(backend="rocm")
 
 
+@pytest.fixture
+def _no_op_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent build_llm_client's load_dotenv() from re-reading the project .env.
+
+    Otherwise monkeypatch.delenv is undone by load_dotenv reading the real
+    .env file back in.
+    """
+    import dotenv
+
+    import industrial_ai.agents.llm_client as llm_client_module
+
+    def _noop(*_: object, **__: object) -> bool:
+        return False
+
+    monkeypatch.setattr(dotenv, "load_dotenv", _noop)
+    monkeypatch.setattr(llm_client_module, "load_dotenv", _noop, raising=False)
+
+
 def test_build_llm_client_nim_returns_openai_chat_client(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
 ) -> None:
     monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test")
     monkeypatch.setenv("NVIDIA_BASE_URL", "https://nim.test/v1")
-    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/test-model")
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/llama-3.3-nemotron-super-49b-v1.5")
     client = build_llm_client(backend="nim")
     assert isinstance(client, OpenAIChatLLMClient)
     assert client.base_url == "https://nim.test/v1"
-    assert client.model == "nvidia/test-model"
+    assert client.model == "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+
+
+def test_build_llm_client_nim_dispatches_protocol_by_model_prefix(
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
+) -> None:
+    """build_llm_client picks the right ReasoningProtocol per ADR-011 registry."""
+    from industrial_ai.agents.llm_client import (
+        DeepSeekExtraBodyProtocol,
+        NemotronExtraBodyProtocol,
+        NemotronMarkerProtocol,
+    )
+
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/llama-3.3-nemotron-super-49b-v1.5")
+    c1 = build_llm_client(backend="nim")
+    assert isinstance(c1.reasoning_protocol, NemotronMarkerProtocol)
+    assert c1.temperature == pytest.approx(0.6)
+
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    c2 = build_llm_client(backend="nim")
+    assert isinstance(c2.reasoning_protocol, NemotronExtraBodyProtocol)
+    assert c2.temperature == pytest.approx(1.0)
+
+    monkeypatch.setenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash")
+    c3 = build_llm_client(backend="nim")
+    assert isinstance(c3.reasoning_protocol, DeepSeekExtraBodyProtocol)
+    assert c3.temperature == pytest.approx(1.0)
+
+
+def test_build_llm_client_nim_unknown_model_raises_named_error(
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
+) -> None:
+    """ADR-010 §2: unknown model identifier raises, no silent default."""
+    from industrial_ai.agents.errors import UnknownReasoningProtocolError
+
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+    monkeypatch.setenv("NVIDIA_MODEL", "unknown-vendor/mystery-model-7b")
+    with pytest.raises(UnknownReasoningProtocolError) as exc_info:
+        build_llm_client(backend="nim")
+    assert "mystery-model-7b" in str(exc_info.value)
 
 
 def test_build_llm_client_mac_studio_returns_mlx_client_with_defaults(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
 ) -> None:
     monkeypatch.delenv("MAC_STUDIO_BASE_URL", raising=False)
     monkeypatch.delenv("MAC_STUDIO_MODEL", raising=False)
@@ -598,7 +847,7 @@ def test_build_llm_client_mac_studio_returns_mlx_client_with_defaults(
 
 
 def test_build_llm_client_nim_raises_with_all_missing_vars_listed(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
 ) -> None:
     monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
     monkeypatch.delenv("NVIDIA_BASE_URL", raising=False)
@@ -612,7 +861,7 @@ def test_build_llm_client_nim_raises_with_all_missing_vars_listed(
 
 
 def test_build_llm_client_nim_lists_only_missing_vars(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
 ) -> None:
     """Only the missing vars are listed, present ones are not."""
     monkeypatch.setenv("NVIDIA_API_KEY", "k")

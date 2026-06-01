@@ -50,10 +50,13 @@ OpenAI-Chat-API.
   served by NIM in BF16 (full precision). Same model family as ADR-005,
   hosted at full precision rather than local 8-bit MLX. Provides a
   clean one-variable delta against the Mac-Studio results.
-- **Phase-5 ablation host:** Mac-Studio stack retained for the
-  cross-family ablation slot (Qwen3.6-27B per ADR-005, or the
-  successor decided at Phase-5 kickoff). The `MLXServerLLMClient`
-  and its supporting jinja2 chat-template fixture remain in the codebase.
+- **Phase-5 ablation host:** Per ADR-012 (2026-06-01), the cross-family
+  ablation model is the DeepSeek family on the *same* NIM-hosted
+  endpoint as the primary. ADR-005's original Mac-Studio + Qwen3.6-27B
+  ablation plan is superseded. The Mac-Studio MLX stack and
+  `MLXServerLLMClient` remain in the codebase as a reference
+  implementation and contingency switch (`--backend mac-studio`) but no
+  routine evaluation route uses them.
 - **Open: capability-ceiling upgrade.** Whether to escalate the
   primary to `nvidia/llama-3.1-nemotron-ultra-253b-v1` (5× the
   capacity, same agentic post-training lineage) is deferred to a
@@ -67,6 +70,46 @@ factory selects between them based on a `.env`-controlled config or
 CLI flag.
 
 ## Rationale
+
+### Reproducibility chain
+
+This ADR's strongest methodological asset is not the choice of NIM as the
+platform but the **reproducibility chain** that the platform participates in.
+The chain has six links, every one of them open or fixed in code:
+
+| Link | Status | Reproduction path |
+|---|---|---|
+| Model weights (`nvidia/llama-3.3-nemotron-super-49b-v1.5`) | Open-weights (Llama Community License) on HuggingFace | Anyone can download |
+| Chat template (jinja2) | Public in the HuggingFace repo | Anyone can render |
+| Sampling parameters (T=0.6, top_p=0.95, max_tokens=512/4096) | Pinned in `industrial_ai.agents.llm_client` | Anyone can read the source |
+| Seeds (0, 1, 2 for the N=3 smoke; pinned for Phase-3 evaluation) | Pinned in `tools/run_c2_smoke.py` and successor drivers | Anyone can rerun |
+| Inference protocol (OpenAI Chat Completions) | Open standard | Any compatible server |
+| Inference host (NIM) | Free-tier hosted, no credit card | Anyone with a developer account |
+
+A third-party replication study therefore has **two independent
+reproduction paths**:
+
+1. **NIM-hosted replication** — sign up at `build.nvidia.com`, point
+   `base_url` and `model` at the same identifiers we used, run the same
+   driver. Five minutes of setup, $0 cost, byte-identical reproduction
+   modulo seed-driven sampling variance.
+2. **Self-hosted replication** — download the model weights, run vLLM
+   (or SGLang, or llama.cpp server, any OpenAI-Chat-compatible inference
+   engine), swap `NVIDIA_BASE_URL` in `.env` to localhost. Independent
+   of NVIDIA's hosted service availability.
+
+This is a categorically stronger reproducibility position than a paper
+that used a closed-weight commercial API (Anthropic, OpenAI, Google).
+Closed-weight APIs degrade on three axes simultaneously: model can be
+deprecated, model can drift silently between calls, and the per-token cost
+bars cost-constrained replicators. The Nemotron-on-NIM stack has none of
+those properties.
+
+**Implication for the paper.** §3.4 Methods (Agentic Supervisor) names the
+reproducibility chain explicitly rather than burying it as an implementation
+detail. The paper's methodological claim *"this architecture works with an
+open-weight agentic-post-trained LLM, reproducibly so"* is the contribution
+that the ablation slot then generalizes across LLM families.
 
 ### Why NIM as the hosted-primary platform
 
