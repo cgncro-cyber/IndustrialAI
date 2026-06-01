@@ -361,6 +361,12 @@ class _MLXServerConfig:
         "mlx-server"  # mlx_lm.server ignores it; openai client requires a non-empty string
     )
     request_timeout_s: float = 600.0
+    #: Best-effort determinism seed forwarded to ``/v1/completions``.
+    #: mlx_lm.server 0.31.3 reads it from the request body and seeds
+    #: ``mx.random`` before generation (verified against
+    #: ``mlx_lm/server.py`` body validation + ``mx.random.seed`` call).
+    #: ``None`` lets the server pick a fresh random seed per request.
+    seed: int | None = None
 
 
 class MLXServerLLMClient(LLMClient):
@@ -397,12 +403,14 @@ class MLXServerLLMClient(LLMClient):
         api_key: str | None = None,
         request_timeout_s: float | None = None,
         chat_template_path: str | None = None,
+        seed: int | None = None,
     ) -> None:
         self._cfg = _MLXServerConfig(
             base_url=base_url or _MLXServerConfig.base_url,
             model=model or _MLXServerConfig.model,
             api_key=api_key or _MLXServerConfig.api_key,
             request_timeout_s=request_timeout_s or _MLXServerConfig.request_timeout_s,
+            seed=seed,
         )
         if chat_template_path is None:
             from pathlib import Path
@@ -466,15 +474,21 @@ class MLXServerLLMClient(LLMClient):
             add_generation_prompt=True,
         )
         # ADR 010 §2: single attempt, named exception on network failure.
+        # mlx_lm.server 0.31.3 accepts a per-request `seed` in the body
+        # and threads it into ``mx.random.seed`` before generation;
+        # ``None`` lets the server pick a fresh random seed per request.
+        completion_kwargs: dict[str, Any] = {
+            "model": self._cfg.model,
+            "prompt": rendered,
+            "max_tokens": effective_max_tokens,
+            "temperature": temperature,
+            "top_p": top_p,
+            "stop": ["<|eot_id|>"],
+        }
+        if self._cfg.seed is not None:
+            completion_kwargs["seed"] = self._cfg.seed
         try:
-            reply = client.completions.create(  # pragma: no cover - requires a live mlx_lm.server endpoint
-                model=self._cfg.model,
-                prompt=rendered,
-                max_tokens=effective_max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                stop=["<|eot_id|>"],
-            )
+            reply = client.completions.create(**completion_kwargs)
         except Exception as exc:
             raise LLMEndpointUnreachableError(
                 f"mlx_lm.server endpoint {self._cfg.base_url!r} unreachable: "

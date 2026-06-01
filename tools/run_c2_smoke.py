@@ -79,7 +79,15 @@ def main() -> int:
     print(f"output:   {args.output}")
     print(f"git_sha:  {_git_sha()}")
 
-    llm = MLXServerLLMClient(base_url=args.base_url, request_timeout_s=180.0)
+    # mlx_lm.server 0.31.3 reads a per-request `seed` from the body
+    # and seeds mx.random before generation, so --seed gives best-
+    # effort cross-run determinism (verified against server.py in
+    # the pinned mlx-lm 0.31.3).
+    llm = MLXServerLLMClient(
+        base_url=args.base_url,
+        request_timeout_s=180.0,
+        seed=args.seed,
+    )
     # nominal_baseline has no disturbance — canonical kpis.md §1.1
     # targets are the nominal SS values.
     runner = AgentRunner(

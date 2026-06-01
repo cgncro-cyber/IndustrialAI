@@ -337,3 +337,32 @@ def test_mlx_client_raises_when_usage_field_partial() -> None:
     with pytest.raises(LLMResponseMissingUsageError) as exc_info:
         client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
     assert "completion_tokens" in str(exc_info.value)
+
+
+class _FakeCompletionsCapturingKwargs:
+    last_kwargs: ClassVar[dict[str, object]] = {}
+
+    def create(self, **kwargs: object) -> _FakeReplyOK:
+        _FakeCompletionsCapturingKwargs.last_kwargs = dict(kwargs)
+        return _FakeReplyOK()
+
+
+class _FakeOpenAICapturing:
+    completions = _FakeCompletionsCapturingKwargs()
+
+
+def test_mlx_client_threads_seed_into_completions_request() -> None:
+    """Item 3: --seed is wired through to mlx_lm.server 0.31.3 /v1/completions."""
+    client = MLXServerLLMClient(base_url="http://fake/v1", request_timeout_s=10.0, seed=42)
+    client._client = _FakeOpenAICapturing()  # type: ignore[assignment]
+    client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    assert _FakeCompletionsCapturingKwargs.last_kwargs.get("seed") == 42
+
+
+def test_mlx_client_omits_seed_when_unset() -> None:
+    """``seed=None`` must NOT be sent — let the server pick its own."""
+    client = MLXServerLLMClient(base_url="http://fake/v1", request_timeout_s=10.0)
+    client._client = _FakeOpenAICapturing()  # type: ignore[assignment]
+    _FakeCompletionsCapturingKwargs.last_kwargs = {}
+    client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    assert "seed" not in _FakeCompletionsCapturingKwargs.last_kwargs
