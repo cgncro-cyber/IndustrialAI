@@ -116,3 +116,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 addopts = "-ra --cov=industrial_ai --cov-report=term-missing"
 testpaths = ["tests"]
+markers = [
+    "live_llm: integration test against the live MLX server (ADR 005 amendment). Skipped by default; enable with --run-live-llm.",
+]

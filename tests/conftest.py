@@ -10,6 +10,27 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--run-live-llm",
+        action="store_true",
+        default=False,
+        help="Run integration tests marked live_llm against the MLX server "
+        "(ADR 005 amendment endpoint). Skipped by default to keep the unit "
+        "suite independent of the Mac Studio runtime.",
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if config.getoption("--run-live-llm"):
+        return
+    skip_live = pytest.mark.skip(reason="needs --run-live-llm to run")
+    for item in items:
+        if "live_llm" in item.keywords:
+            item.add_marker(skip_live)
+
+
 #: Path to the published Skogestad steady-state reference data, extracted
 #: from ``cola_init.mat`` at
 #: https://skoge.folk.ntnu.no/book/1st_edition/matlab_m/cola/cola_init.mat
