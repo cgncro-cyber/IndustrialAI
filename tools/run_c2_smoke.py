@@ -2,17 +2,23 @@
 
 One supervisory loop over a nominal (no-disturbance) horizon, single seed.
 Deliberately minimal: proves the AgentRunner → MPC backend → plant
-integration is functional end-to-end against the live MLX server before
-the full ``tools/run_c2_agent_scenarios.py`` driver is scaffolded.
+integration is functional end-to-end against the chosen LLM backend
+before the full ``tools/run_c2_agent_scenarios.py`` driver is scaffolded.
+
+Backend selection (ADR 011): ``--backend nim`` (default) uses the hosted
+NVIDIA NIM Nemotron endpoint; ``--backend mac-studio`` uses the local
+``mlx_lm.server`` stack retained as the Phase-5 ablation host. The
+factory ``build_llm_client`` reads ``.env`` for the required vars.
 
 Output (single JSON, no parquet/manifest yet — that lands with the full
 driver):
 
-    data/runs/c2_smoke/nominal_baseline/seed0/smoke.json
+    data/runs/c2_smoke/<scenario>/seed<seed>_<backend>/smoke.json
 
 Invocation::
 
-    uv run python tools/run_c2_smoke.py
+    uv run python tools/run_c2_smoke.py                       # default NIM
+    uv run python tools/run_c2_smoke.py --backend mac-studio  # ablation host
     uv run python tools/run_c2_smoke.py --horizon-min 30 --tick-min 5
 
 Per-cycle output is printed live so the LLM ↔ MPC handshake is observable
@@ -33,20 +39,31 @@ import numpy as np
 
 from industrial_ai.agents.errors import (
     LLMEndpointUnreachableError,
-    LLMResponseMissingUsageError,
     LLMResponseParseError,
+    MissingUsageError,
 )
 from industrial_ai.agents.graph import AgentRunner, GraphConfig
-from industrial_ai.agents.llm_client import MLXServerLLMClient
+from industrial_ai.agents.llm_client import build_llm_client
 from industrial_ai.agents.regulatory_backend import build_regulatory_backend
 from industrial_ai.twin.column_a import DEFAULT_PARAMETERS
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _SS_FIXTURE = _REPO_ROOT / "data" / "reference" / "skogestad_column_a_steady_state.json"
-_DEFAULT_OUT = (
-    _REPO_ROOT / "data" / "runs" / "c2_smoke" / "nominal_baseline" / "seed0" / "smoke.json"
-)
-_DEFAULT_BASE_URL = "http://192.168.178.81:8080/v1"
+_SCENARIO = "nominal_baseline"
+
+
+def _default_output_path(seed: int, backend: str) -> Path:
+    """Disambiguate NIM vs Mac-Studio runs in the audit trail (ADR 011)."""
+    backend_slug = backend.replace("-", "_")
+    return (
+        _REPO_ROOT
+        / "data"
+        / "runs"
+        / "c2_smoke"
+        / _SCENARIO
+        / f"seed{seed}_{backend_slug}"
+        / "smoke.json"
+    )
 
 
 def _git_sha() -> str:
@@ -68,31 +85,48 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--horizon-min", type=float, default=60.0)
     parser.add_argument("--tick-min", type=float, default=5.0)
-    parser.add_argument("--base-url", default=_DEFAULT_BASE_URL)
-    parser.add_argument("--output", type=Path, default=_DEFAULT_OUT)
+    parser.add_argument(
+        "--backend",
+        choices=("nim", "mac-studio"),
+        default="nim",
+        help="Inference backend (ADR 011). 'nim' uses the hosted "
+        "NVIDIA Nemotron endpoint (default), 'mac-studio' uses the "
+        "local mlx_lm.server stack retained as the Phase-5 ablation host.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Output JSON path; defaults to "
+        "data/runs/c2_smoke/<scenario>/seed<seed>_<backend>/smoke.json.",
+    )
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    output_path = (
+        args.output if args.output is not None else _default_output_path(args.seed, args.backend)
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     p = DEFAULT_PARAMETERS
     NT = p.NT
 
-    print(
-        f"=== C2 smoke — nominal_baseline, horizon={args.horizon_min} min, tick={args.tick_min} min ==="
+    # ADR 011: factory selects the right client per backend; the
+    # transport's seed-thread-through differs (NIM body `seed`, MLX
+    # body `seed`) but both honor it.
+    llm = build_llm_client(backend=args.backend, seed=args.seed)
+    endpoint = getattr(llm, "base_url", None) or getattr(
+        getattr(llm, "_cfg", None), "base_url", "?"
     )
-    print(f"endpoint: {args.base_url}")
-    print(f"output:   {args.output}")
-    print(f"git_sha:  {_git_sha()}")
+    model_name = getattr(llm, "model", None) or getattr(getattr(llm, "_cfg", None), "model", "?")
 
-    # mlx_lm.server 0.31.3 reads a per-request `seed` from the body
-    # and seeds mx.random before generation, so --seed gives best-
-    # effort cross-run determinism (verified against server.py in
-    # the pinned mlx-lm 0.31.3).
-    llm = MLXServerLLMClient(
-        base_url=args.base_url,
-        request_timeout_s=180.0,
-        seed=args.seed,
+    print(
+        f"=== C2 smoke — {_SCENARIO}, backend={args.backend}, "
+        f"horizon={args.horizon_min} min, tick={args.tick_min} min ==="
     )
+    print(f"endpoint: {endpoint}")
+    print(f"model:    {model_name}")
+    print(f"output:   {output_path}")
+    print(f"git_sha:  {_git_sha()}")
     # nominal_baseline has no disturbance — canonical kpis.md §1.1
     # targets are the nominal SS values.
     runner = AgentRunner(
@@ -137,7 +171,7 @@ def main() -> int:
             )
         except (
             LLMResponseParseError,
-            LLMResponseMissingUsageError,
+            MissingUsageError,
             LLMEndpointUnreachableError,
         ) as exc:
             abort_at_cycle = i
@@ -211,16 +245,18 @@ def main() -> int:
     )
 
     payload: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": datetime.now(tz=UTC).isoformat(),
         "git_sha": _git_sha(),
         "config": {
-            "scenario": "nominal_baseline",
+            "scenario": _SCENARIO,
             "horizon_min": args.horizon_min,
             "tick_min": args.tick_min,
             "n_ticks": n_ticks,
             "seed": args.seed,
-            "base_url": args.base_url,
+            "backend": args.backend,
+            "base_url": endpoint,
+            "model": model_name,
             "regulatory_backend": "mpc",
             "F_kmol_per_min": p.nominal_feed_F_kmol_per_min,
             "zF": 0.5,
@@ -249,9 +285,9 @@ def main() -> int:
         },
         "cycles": cycles,
     }
-    with args.output.open("w") as fh:
+    with output_path.open("w") as fh:
         json.dump(payload, fh, indent=2)
-    print(f"wrote {args.output}")
+    print(f"wrote {output_path}")
     # ADR 010: a partial run is non-zero exit so CI surfaces it.
     return 0 if abort_at_cycle is None else 2
 
