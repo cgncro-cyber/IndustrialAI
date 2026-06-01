@@ -91,6 +91,26 @@ def test_parse_setpoint_json_rejects_no_object() -> None:
         _parse_setpoint_json("no JSON in here at all")
 
 
+def test_parse_setpoint_json_accepts_control_chars_in_rationale() -> None:
+    """Nemotron embeds literal tabs/newlines in markdown-bullet rationales.
+
+    Surfaced empirically on the 2026-06-01 C2 smoke re-run on
+    nominal_baseline (Cycle 1 response contained an embedded
+    multi-line bulleted rationale). The numeric fields are
+    unaffected by the relaxed parser.
+    """
+    text = (
+        '{"y_D_target": 0.995, "x_B_target": 0.005, '
+        '"rationale": "Targets balance:\n'
+        "\t- **y_D_target**: slightly above current to drive purification.\n"
+        '\t- **x_B_target**: below current to reduce bottoms light fraction."}'
+    )
+    parsed = _parse_setpoint_json(text)
+    assert parsed.y_D_target == pytest.approx(0.995)
+    assert parsed.x_B_target == pytest.approx(0.005)
+    assert "y_D_target" in parsed.rationale
+
+
 def test_parse_setpoint_json_rejects_malformed_json() -> None:
     with pytest.raises(LLMResponseParseError):
         _parse_setpoint_json("{this is not valid JSON}")

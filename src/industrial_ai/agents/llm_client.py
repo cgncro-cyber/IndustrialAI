@@ -323,6 +323,14 @@ def _parse_setpoint_json(text: str) -> SetpointProposalInput:
     object with keys ``y_D_target``, ``x_B_target``, ``rationale``.
     This helper enforces the contract; schema validation rejects
     out-of-bounds values.
+
+    ``strict=False`` is passed to :func:`json.loads` so literal tab /
+    newline characters inside the ``rationale`` string value do not
+    abort parsing. Nemotron-Super 49B v1.5 frequently formats
+    rationales with markdown-style bullet indentation that embeds
+    these control characters; strict JSON would reject them, but
+    they are semantically harmless inside the rationale's free-text
+    field. The numeric fields are untouched by this relaxation.
     """
     import json
     import re
@@ -331,7 +339,7 @@ def _parse_setpoint_json(text: str) -> SetpointProposalInput:
     if match is None:
         raise LLMResponseParseError(f"could not find a JSON object in LLM response: {text!r}")
     try:
-        payload = json.loads(match.group(0))
+        payload = json.loads(match.group(0), strict=False)
     except json.JSONDecodeError as exc:
         raise LLMResponseParseError(
             f"invalid JSON in LLM response: {match.group(0)!r} ({exc})"
