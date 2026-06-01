@@ -90,6 +90,43 @@ def test_cycle_outcome_propagates_token_counts(nominal_X: np.ndarray) -> None:
     assert out.completion_tokens > 0
 
 
+class _ReasoningProbeMockLLM(LLMClient):
+    """Mock that captures the ``reasoning`` flag of the most recent call.
+
+    Used to assert the GraphConfig.first_round_reasoning override
+    threads correctly through _optimizer_node / run_one_cycle.
+    """
+
+    name = "reasoning_probe"
+
+    def __init__(self) -> None:
+        self.calls: list[bool] = []
+
+    def complete(self, **kwargs: object) -> LLMResponse:
+        self.calls.append(bool(kwargs.get("reasoning", False)))
+        proposal = SetpointProposalInput(y_D_target=0.99, x_B_target=0.01, rationale="ok")
+        return LLMResponse(proposal=proposal, raw_text="ok", prompt_tokens=1, completion_tokens=1)
+
+
+def test_first_round_reasoning_default_uses_reasoning_false(
+    nominal_X: np.ndarray,
+) -> None:
+    """Default GraphConfig.first_round_reasoning=False → first call reasoning=False."""
+    probe = _ReasoningProbeMockLLM()
+    _nominal_run(nominal_X, probe)
+    assert probe.calls == [False]
+
+
+def test_first_round_reasoning_true_forces_reasoning_on_round_1(
+    nominal_X: np.ndarray,
+) -> None:
+    """Schritt-A.1: first_round_reasoning=True flips the first call to reasoning=True."""
+    probe = _ReasoningProbeMockLLM()
+    cfg = GraphConfig(first_round_reasoning=True)
+    _nominal_run(nominal_X, probe, config=cfg)
+    assert probe.calls == [True]
+
+
 def test_wall_clock_is_recorded(nominal_X: np.ndarray) -> None:
     out = _nominal_run(nominal_X, MockLLMClient(policy="nominal"))
     assert out.wall_clock_seconds > 0

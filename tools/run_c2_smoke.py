@@ -66,17 +66,28 @@ def _model_slug(model_identifier: str) -> str:
     return model_identifier.rsplit("/", 1)[-1].lower()
 
 
-def _default_output_path(seed: int, backend: str, model_identifier: str | None) -> Path:
+def _default_output_path(
+    seed: int,
+    backend: str,
+    model_identifier: str | None,
+    run_tag: str | None = None,
+) -> Path:
     """Disambiguate NIM vs Mac-Studio AND per-model runs in the audit trail.
 
     Path shape per ADR 011 / 012::
 
-        data/runs/c2_smoke/{scenario}/seed{seed}_{backend}_{model_slug}/smoke.json
+        data/runs/c2_smoke/{scenario}/seed{seed}_{backend}_{model_slug}[_{run_tag}]/smoke.json
+
+    ``run_tag`` carries the per-run override fingerprint for the
+    Schritt-A.1 variance-diagnosis pass (e.g. ``t06``,
+    ``reasoning_b2048``).
     """
     backend_slug = backend.replace("-", "_")
     leaf = f"seed{seed}_{backend_slug}"
     if model_identifier:
         leaf = f"{leaf}_{_model_slug(model_identifier)}"
+    if run_tag:
+        leaf = f"{leaf}_{run_tag}"
     return _REPO_ROOT / "data" / "runs" / "c2_smoke" / _SCENARIO / leaf / "smoke.json"
 
 
@@ -115,11 +126,42 @@ def main() -> int:
         "Has no effect on --backend mac-studio.",
     )
     parser.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help="Override the protocol's default temperature for this run. "
+        "Schritt-A.1 variance-diagnosis knob; no effect when omitted.",
+    )
+    parser.add_argument(
+        "--reasoning-mode",
+        choices=("on", "off"),
+        default=None,
+        help="Force the first Optimizer LLM call's reasoning mode. 'on' "
+        "enables chain-of-thought from cycle 0; 'off' (default behavior "
+        "when omitted) uses the modal /no_think path. Critic-revision "
+        "rounds always use reasoning=True regardless.",
+    )
+    parser.add_argument(
+        "--reasoning-budget",
+        type=int,
+        default=None,
+        help="Override the reasoning_budget threaded into "
+        "NemotronExtraBodyProtocol's extra_body. Silently ignored for "
+        "protocols that don't take a budget parameter.",
+    )
+    parser.add_argument(
+        "--run-tag",
+        default=None,
+        help="Append this string to the default output dir name so multiple "
+        "configurations of the same (seed, backend, model) tuple don't "
+        "collide. Examples: 't06', 'reasoning_b2048'.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
         help="Output JSON path; defaults to "
-        "data/runs/c2_smoke/<scenario>/seed<seed>_<backend>_<model_slug>/smoke.json.",
+        "data/runs/c2_smoke/<scenario>/seed<seed>_<backend>_<model_slug>[_<run_tag>]/smoke.json.",
     )
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
@@ -131,8 +173,14 @@ def main() -> int:
 
     # ADR 011: factory selects the right client per backend; the
     # transport's seed-thread-through differs (NIM body `seed`, MLX
-    # body `seed`) but both honor it.
-    llm = build_llm_client(backend=args.backend, seed=args.seed)
+    # body `seed`) but both honor it. Schritt-A.1 overrides flow
+    # through the factory's kwargs.
+    llm = build_llm_client(
+        backend=args.backend,
+        seed=args.seed,
+        temperature_override=args.temperature,
+        reasoning_budget_override=args.reasoning_budget,
+    )
     endpoint = getattr(llm, "base_url", None) or getattr(
         getattr(llm, "_cfg", None), "base_url", "?"
     )
@@ -142,7 +190,7 @@ def main() -> int:
     output_path = (
         args.output
         if args.output is not None
-        else _default_output_path(args.seed, args.backend, model_for_path)
+        else _default_output_path(args.seed, args.backend, model_for_path, args.run_tag)
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     p = DEFAULT_PARAMETERS
@@ -157,19 +205,38 @@ def main() -> int:
     )
     client_temperature = getattr(llm, "temperature", None)
     client_top_p = getattr(llm, "top_p", None)
+    # First-round reasoning toggle drives both the runner's behavior
+    # and the audit-block summary. Defaults to off when the CLI flag
+    # is omitted, matching the modal /no_think path.
+    first_round_reasoning = args.reasoning_mode == "on"
+    reasoning_mode_label = "on" if first_round_reasoning else "off"
     effective_max_tokens = (
-        reasoning_protocol_obj.max_tokens_for(reasoning=False) if reasoning_protocol_obj else None
+        reasoning_protocol_obj.max_tokens_for(reasoning=first_round_reasoning)
+        if reasoning_protocol_obj
+        else None
+    )
+    # If the protocol carries a reasoning_budget, record the
+    # effective value for audit (overridden value or the protocol's
+    # own default). For protocols without a budget, record null.
+    effective_reasoning_budget = (
+        getattr(reasoning_protocol_obj, "reasoning_budget", None)
+        if reasoning_protocol_obj
+        else None
     )
 
     print(
         f"=== C2 smoke — {_SCENARIO}, backend={args.backend}, "
         f"horizon={args.horizon_min} min, tick={args.tick_min} min ==="
     )
-    print(f"endpoint: {endpoint}")
-    print(f"model:    {model_name}")
-    print(f"protocol: {reasoning_protocol_name}")
-    print(f"output:   {output_path}")
-    print(f"git_sha:  {_git_sha()}")
+    print(f"endpoint:     {endpoint}")
+    print(f"model:        {model_name}")
+    print(f"protocol:     {reasoning_protocol_name}")
+    print(f"temperature:  {client_temperature}")
+    print(f"reasoning:    {reasoning_mode_label} (budget={effective_reasoning_budget})")
+    if args.run_tag:
+        print(f"run_tag:      {args.run_tag}")
+    print(f"output:       {output_path}")
+    print(f"git_sha:      {_git_sha()}")
     # nominal_baseline has no disturbance — canonical kpis.md §1.1
     # targets are the nominal SS values.
     runner = AgentRunner(
@@ -177,7 +244,10 @@ def main() -> int:
         regulatory_backend=build_regulatory_backend("mpc"),
         canonical_y_D_target=0.99,
         canonical_x_B_target=0.01,
-        config=GraphConfig(supervisor_period_min=args.tick_min),
+        config=GraphConfig(
+            supervisor_period_min=args.tick_min,
+            first_round_reasoning=first_round_reasoning,
+        ),
     )
 
     X = _load_nominal_ss()
@@ -290,7 +360,7 @@ def main() -> int:
     )
 
     payload: dict[str, Any] = {
-        "schema_version": 3,
+        "schema_version": 4,
         "generated_at_utc": datetime.now(tz=UTC).isoformat(),
         "git_sha": _git_sha(),
         "config": {
@@ -304,7 +374,9 @@ def main() -> int:
             "model": model_name,
             "model_identifier": model_name,
             "reasoning_protocol": reasoning_protocol_name,
-            "reasoning_mode": "off",
+            "reasoning_mode": reasoning_mode_label,
+            "reasoning_budget": effective_reasoning_budget,
+            "run_tag": args.run_tag,
             "temperature": client_temperature,
             "top_p": client_top_p,
             "max_tokens": effective_max_tokens,

@@ -837,6 +837,58 @@ def test_build_llm_client_nim_unknown_model_raises_named_error(
     assert "mystery-model-7b" in str(exc_info.value)
 
 
+def test_build_llm_client_nim_temperature_override(
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
+) -> None:
+    """Schritt-A.1: --temperature override propagates to the client."""
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    c = build_llm_client(backend="nim", temperature_override=0.6)
+    assert isinstance(c, OpenAIChatLLMClient)
+    assert c.temperature == pytest.approx(0.6)
+
+
+def test_build_llm_client_nim_temperature_override_none_uses_protocol_default(
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
+) -> None:
+    """When temperature_override=None the protocol's default applies."""
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    c = build_llm_client(backend="nim", temperature_override=None)
+    assert c.temperature == pytest.approx(1.0)  # NemotronExtraBody default
+
+
+def test_build_llm_client_nim_reasoning_budget_override(
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
+) -> None:
+    """Schritt-A.1: --reasoning-budget override threads to NemotronExtraBodyProtocol."""
+    from industrial_ai.agents.llm_client import NemotronExtraBodyProtocol
+
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    c = build_llm_client(backend="nim", reasoning_budget_override=2048)
+    assert isinstance(c.reasoning_protocol, NemotronExtraBodyProtocol)
+    assert c.reasoning_protocol.reasoning_budget == 2048
+
+
+def test_build_llm_client_nim_reasoning_budget_override_noop_on_marker(
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
+) -> None:
+    """NemotronMarkerProtocol has no budget; override is silently ignored."""
+    from industrial_ai.agents.llm_client import NemotronMarkerProtocol
+
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/llama-3.3-nemotron-super-49b-v1.5")
+    c = build_llm_client(backend="nim", reasoning_budget_override=2048)
+    assert isinstance(c.reasoning_protocol, NemotronMarkerProtocol)
+    # No budget attribute; nothing to assert about it. Construction
+    # succeeding without raising is the contract.
+
+
 def test_build_llm_client_mac_studio_returns_mlx_client_with_defaults(
     monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
 ) -> None:

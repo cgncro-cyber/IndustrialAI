@@ -63,6 +63,14 @@ class GraphConfig:
     system_prompt : str
         Stable system prompt shared across Observer / Optimizer
         calls. The Critic uses a separate prompt below.
+    first_round_reasoning : bool
+        Override the modal default for the first Optimizer call in
+        a cycle. ``False`` (default, per ADR 005 amendment): first
+        round runs with ``reasoning=False`` (fast tool-call mode);
+        revise rounds always escalate to ``reasoning=True``.
+        ``True``: first round also runs with ``reasoning=True``;
+        revise behavior unchanged. Useful for variance-diagnosis
+        smokes on reasoning-capable models.
     """
 
     max_critic_optimizer_rounds: int = 3
@@ -75,6 +83,7 @@ class GraphConfig:
         "x_B_target. Reply in a single JSON object with keys y_D_target, "
         "x_B_target, rationale."
     )
+    first_round_reasoning: bool = False
 
 
 @dataclass(slots=True)
@@ -162,6 +171,7 @@ def _optimizer_node(
     llm_client: LLMClient,
     system_prompt: str,
     critic_feedback: str | None = None,
+    first_round_reasoning: bool = False,
 ) -> tuple[OptimizerProposal, int, int, str | None]:
     """Call the LLM to propose a ``(y_D_target, x_B_target)`` pair.
 
@@ -183,10 +193,10 @@ def _optimizer_node(
     # Round 1 (no critic feedback) runs in fast /no_think mode for
     # the typical accept path; revisions enable chain-of-thought so
     # the Optimizer has room to reconsider against the Critic's
-    # objection. The LLMClient implementation (MLXServerLLMClient)
-    # consumes ``reasoning`` to inject the marker and pick the
-    # max-tokens budget.
-    reasoning = critic_feedback is not None
+    # objection. ``first_round_reasoning`` overrides the round-1
+    # default so a smoke can force chain-of-thought from cycle 0
+    # (variance-diagnosis pass per Schritt A.1).
+    reasoning = critic_feedback is not None or first_round_reasoning
     reply = llm_client.complete(
         system_prompt=system_prompt,
         user_prompt=body,
@@ -348,6 +358,7 @@ def run_one_cycle(
                 llm_client=llm_client,
                 system_prompt=cfg.system_prompt,
                 critic_feedback=critic_feedback,
+                first_round_reasoning=cfg.first_round_reasoning,
             )
         )
         prompt_tokens_total += call_prompt_tokens

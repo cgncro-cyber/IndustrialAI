@@ -907,7 +907,32 @@ def _resolve_reasoning_protocol(model: str) -> ReasoningProtocol:
     )
 
 
-def build_llm_client(backend: str, *, seed: int | None = None) -> LLMClient:
+def _build_reasoning_protocol_for(
+    model: str,
+    *,
+    reasoning_budget_override: int | None = None,
+) -> ReasoningProtocol:
+    """Resolve the protocol for ``model``, threading any per-run overrides.
+
+    Currently only :class:`NemotronExtraBodyProtocol` understands
+    ``reasoning_budget``; for the other two protocols the override is
+    silently ignored. ADR 010 §2 spirit: we don't fail-fast on the
+    no-op case because passing the same CLI flag across multiple
+    smokes (mixed models) is a routine variance-diagnosis pattern.
+    """
+    base = _resolve_reasoning_protocol(model)
+    if reasoning_budget_override is not None and isinstance(base, NemotronExtraBodyProtocol):
+        return NemotronExtraBodyProtocol(reasoning_budget=reasoning_budget_override)
+    return base
+
+
+def build_llm_client(
+    backend: str,
+    *,
+    seed: int | None = None,
+    temperature_override: float | None = None,
+    reasoning_budget_override: int | None = None,
+) -> LLMClient:
     """Build the appropriate :class:`LLMClient` per ADR 011.
 
     Loads ``.env`` from project root via ``python-dotenv`` (idempotent
@@ -922,6 +947,19 @@ def build_llm_client(backend: str, *, seed: int | None = None) -> LLMClient:
         defaulting to the values from
         :class:`_MLXServerConfig` so the ablation path works without
         ``.env`` edits).
+
+    Overrides (Phase-3 variance-diagnosis pass per Schritt A.1)
+    ----------------------------------------------------------
+    ``temperature_override``
+        When non-None, replaces the protocol's
+        ``default_temperature`` at client construction. No effect on
+        the mac-studio backend.
+    ``reasoning_budget_override``
+        When non-None and the resolved protocol is
+        :class:`NemotronExtraBodyProtocol`, the protocol is
+        constructed with this budget instead of the default 4096.
+        Silently ignored for protocols that don't take a budget
+        parameter (NemotronMarkerProtocol, DeepSeekExtraBodyProtocol).
 
     Raises
     ------
@@ -945,13 +983,20 @@ def build_llm_client(backend: str, *, seed: int | None = None) -> LLMClient:
                 "them in .env (project root) per ADR 011."
             )
         model = os.environ["NVIDIA_MODEL"]
-        protocol = _resolve_reasoning_protocol(model)
+        protocol = _build_reasoning_protocol_for(
+            model, reasoning_budget_override=reasoning_budget_override
+        )
+        temperature = (
+            temperature_override
+            if temperature_override is not None
+            else protocol.default_temperature
+        )
         return OpenAIChatLLMClient(
             base_url=os.environ["NVIDIA_BASE_URL"],
             api_key=os.environ["NVIDIA_API_KEY"],
             model=model,
             reasoning_protocol=protocol,
-            temperature=protocol.default_temperature,
+            temperature=temperature,
             seed=seed,
         )
     if backend == "mac-studio":
