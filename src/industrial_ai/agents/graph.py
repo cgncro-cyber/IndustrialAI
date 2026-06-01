@@ -79,13 +79,29 @@ class GraphConfig:
 
 @dataclass(slots=True)
 class CycleOutcome:
-    """Full result of one supervisor cycle: decision + regulatory tick + wallclock."""
+    """Full result of one supervisor cycle: decision + regulatory tick + wallclock.
+
+    ``prompt_tokens`` and ``completion_tokens`` are summed over **all**
+    Optimizer LLM calls in this cycle (including revise rounds), so a
+    cycle with two Optimizer rounds reports the combined token cost.
+    The ``MockLLMClient`` emits a rough character-count // 4 estimate
+    on every call so unit tests can observe propagation; the live MLX
+    client extracts the real ``usage`` block from
+    ``/v1/completions`` and raises
+    :class:`LLMResponseMissingUsageError` at the source if the server
+    omits it (ADR 010 §2). A client that legitimately has no usage
+    information (e.g. a future fixture) sets ``prompt_tokens`` /
+    ``completion_tokens`` on the ``LLMResponse`` to ``None`` and the
+    accumulator treats that as zero for the cycle.
+    """
 
     state: AgentState
     regulatory_result: RegulatoryStepResult
     wall_clock_seconds: float
     optimizer_rounds: int
     escalated: bool
+    prompt_tokens: int
+    completion_tokens: int
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +152,7 @@ def _optimizer_node(
     llm_client: LLMClient,
     system_prompt: str,
     critic_feedback: str | None = None,
-) -> OptimizerProposal:
+) -> tuple[OptimizerProposal, int, int]:
     """Call the LLM to propose a ``(y_D_target, x_B_target)`` pair.
 
     Builds a structured user prompt from the Observer report; if a
@@ -166,11 +182,19 @@ def _optimizer_node(
         user_prompt=body,
         reasoning=reasoning,
     )
-    return OptimizerProposal(
+    proposal = OptimizerProposal(
         y_D_target=reply.proposal.y_D_target,
         x_B_target=reply.proposal.x_B_target,
         rationale=reply.proposal.rationale,
     )
+    # `or 0` handles a client that legitimately has no usage info
+    # (LLMResponse fields default to None). MockLLMClient supplies a
+    # char-count // 4 estimate so unit tests see real propagation; the
+    # live MLX client raises LLMResponseMissingUsageError if the
+    # server itself fails to return a `usage` block (ADR 010 §2).
+    prompt_tokens = reply.prompt_tokens or 0
+    completion_tokens = reply.completion_tokens or 0
+    return proposal, prompt_tokens, completion_tokens
 
 
 def _critic_node(
@@ -290,6 +314,8 @@ def run_one_cycle(
     )
 
     critic_feedback: str | None = None
+    prompt_tokens_total = 0
+    completion_tokens_total = 0
     while True:
         # Hard ceiling — defensive belt-and-suspenders branch. The
         # Critic's own budget check (see _critic_node) escalates one
@@ -305,12 +331,14 @@ def run_one_cycle(
                 reason=f"optimizer round budget {cfg.max_critic_optimizer_rounds} exceeded",
             )
             break
-        proposal = _optimizer_node(
+        proposal, call_prompt_tokens, call_completion_tokens = _optimizer_node(
             observer_report=state.observer_report,
             llm_client=llm_client,
             system_prompt=cfg.system_prompt,
             critic_feedback=critic_feedback,
         )
+        prompt_tokens_total += call_prompt_tokens
+        completion_tokens_total += call_completion_tokens
         state.optimizer_proposal = proposal
         state.optimizer_rounds += 1
         verdict = _critic_node(
@@ -365,6 +393,8 @@ def run_one_cycle(
         wall_clock_seconds=wall_end - wall_start,
         optimizer_rounds=state.optimizer_rounds,
         escalated=escalated,
+        prompt_tokens=prompt_tokens_total,
+        completion_tokens=completion_tokens_total,
     )
 
 

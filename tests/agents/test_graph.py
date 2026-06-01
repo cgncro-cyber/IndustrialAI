@@ -75,6 +75,21 @@ def test_single_cycle_nominal_pid_runs_end_to_end(nominal_X: np.ndarray) -> None
     assert out.state.critic_verdict.decision == "accept"
 
 
+def test_cycle_outcome_propagates_token_counts(nominal_X: np.ndarray) -> None:
+    """Per Item 2: token counts from the LLM client must flow through to CycleOutcome.
+
+    MockLLMClient estimates ``prompt_tokens`` / ``completion_tokens``
+    from text length (rough char-count // 4); the graph must surface
+    those into ``CycleOutcome.prompt_tokens`` / ``.completion_tokens``
+    so the smoke driver and downstream KPI consumers see them.
+    Asserting strictly positive values proves the propagation without
+    coupling to the mock's estimation algorithm.
+    """
+    out = _nominal_run(nominal_X, MockLLMClient(policy="nominal"))
+    assert out.prompt_tokens > 0
+    assert out.completion_tokens > 0
+
+
 def test_wall_clock_is_recorded(nominal_X: np.ndarray) -> None:
     out = _nominal_run(nominal_X, MockLLMClient(policy="nominal"))
     assert out.wall_clock_seconds > 0

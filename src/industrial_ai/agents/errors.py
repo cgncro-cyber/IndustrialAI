@@ -14,6 +14,7 @@ __all__ = [
     "AgentError",
     "CriticLoopLimitError",
     "LLMEndpointUnreachableError",
+    "LLMResponseMissingUsageError",
     "LLMResponseParseError",
     "MockLLMClientMisuseError",
     "RegulatoryBackendError",
@@ -46,6 +47,18 @@ class LLMResponseParseError(AgentError):
     Per ADR 010 §2, this aborts the run. The message must include
     the offending text so the operator can iterate on the prompt or
     the schema contract.
+    """
+
+
+class LLMResponseMissingUsageError(AgentError):
+    """The LLM response is missing the documented ``usage`` block.
+
+    The OpenAI-compatible ``/v1/completions`` contract requires a
+    ``usage`` block with ``prompt_tokens`` and ``completion_tokens``.
+    Per ADR 010 §2, a missing or partial ``usage`` is a transport
+    regression worth surfacing rather than silently emitting zero
+    counts — Phase-3 prompt iteration relies on these numbers to
+    debug latency / output-length drift.
     """
 
 

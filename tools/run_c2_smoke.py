@@ -123,12 +123,15 @@ def main() -> int:
         y_D_post = float(X[NT - 1])
         x_B_post = float(X[0])
         verdict = out.state.critic_verdict.decision if out.state.critic_verdict else "?"
+        proposal_in_cycle = out.state.optimizer_proposal
+        rationale = proposal_in_cycle.rationale if proposal_in_cycle else ""
         print(
             f"{i:>3d} {t_min:>6.1f} "
             f"{y_D_pre:>7.4f} {x_B_pre:>7.4f} "
             f"{y_target:>5.3f} {x_target:>5.3f} "
             f"{y_D_post:>8.5f} {x_B_post:>8.5f} "
-            f"{out.wall_clock_seconds:>7.2f} {verdict:>8s}",
+            f"{out.wall_clock_seconds:>7.2f} {verdict:>8s} "
+            f"tok={out.completion_tokens:>4d}",
             flush=True,
         )
         cycles.append(
@@ -146,6 +149,10 @@ def main() -> int:
                 "optimizer_rounds": out.optimizer_rounds,
                 "escalated": out.escalated,
                 "regulatory_simulation_success": out.regulatory_result.simulation.success,
+                "rationale": rationale,
+                "prompt_tokens": out.prompt_tokens,
+                "completion_tokens": out.completion_tokens,
+                "total_tokens": out.prompt_tokens + out.completion_tokens,
             }
         )
 
@@ -153,13 +160,17 @@ def main() -> int:
     aggregate_iae = float(runner._canonical_aggregate_iae)
     internal_tracking_iae = float(runner._internal_tracking_iae)
     cycle_walls = [c["wall_clock_seconds"] for c in cycles]
+    completion_tokens = [c["completion_tokens"] for c in cycles]
+    prompt_tokens = [c["prompt_tokens"] for c in cycles]
     print(
         f"\nDONE: {n_ticks} cycles, "
         f"canonical IAE = {aggregate_iae:.5f}, "
         f"internal tracking IAE = {internal_tracking_iae:.5f}, "
         f"total wall = {total_wall_s:.1f} s, "
         f"per-cycle wall P50/P95/max = "
-        f"{np.percentile(cycle_walls, 50):.2f}/{np.percentile(cycle_walls, 95):.2f}/{max(cycle_walls):.2f} s"
+        f"{np.percentile(cycle_walls, 50):.2f}/{np.percentile(cycle_walls, 95):.2f}/{max(cycle_walls):.2f} s, "
+        f"completion_tokens P50/P95/max = "
+        f"{int(np.percentile(completion_tokens, 50))}/{int(np.percentile(completion_tokens, 95))}/{max(completion_tokens)}"
     )
 
     payload: dict[str, Any] = {
@@ -185,6 +196,11 @@ def main() -> int:
             "cycle_wall_clock_seconds_p50": float(np.percentile(cycle_walls, 50)),
             "cycle_wall_clock_seconds_p95": float(np.percentile(cycle_walls, 95)),
             "cycle_wall_clock_seconds_max": float(max(cycle_walls)),
+            "prompt_tokens_total": sum(prompt_tokens),
+            "completion_tokens_total": sum(completion_tokens),
+            "completion_tokens_p50": int(np.percentile(completion_tokens, 50)),
+            "completion_tokens_p95": int(np.percentile(completion_tokens, 95)),
+            "completion_tokens_max": int(max(completion_tokens)),
             "completed_cycles": runner._completed_cycles,
             "all_regulatory_simulations_succeeded": all(
                 c["regulatory_simulation_success"] for c in cycles

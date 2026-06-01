@@ -30,6 +30,7 @@ from typing import Any
 
 from industrial_ai.agents.errors import (
     LLMEndpointUnreachableError,
+    LLMResponseMissingUsageError,
     LLMResponseParseError,
     MockLLMClientMisuseError,
 )
@@ -479,11 +480,33 @@ class MLXServerLLMClient(LLMClient):
                 f"mlx_lm.server endpoint {self._cfg.base_url!r} unreachable: "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
-        raw = reply.choices[0].text  # pragma: no cover - live endpoint path
-        proposal = _parse_setpoint_json(raw)  # pragma: no cover
-        return LLMResponse(  # pragma: no cover
+        raw = reply.choices[0].text
+        # ADR 010 §2: the /v1/completions contract is documented to
+        # return a `usage` block; missing or partial usage is a
+        # transport regression worth surfacing rather than silently
+        # emitting zeros that would mask latency / output-length drift
+        # in Phase-3 prompt iteration.
+        usage = getattr(reply, "usage", None)
+        if usage is None:
+            raise LLMResponseMissingUsageError(
+                f"mlx_lm.server response from {self._cfg.base_url!r} "
+                "missing the documented `usage` block."
+            )
+        prompt_tokens = getattr(usage, "prompt_tokens", None)
+        completion_tokens = getattr(usage, "completion_tokens", None)
+        if prompt_tokens is None or completion_tokens is None:
+            raise LLMResponseMissingUsageError(
+                f"mlx_lm.server response from {self._cfg.base_url!r} "
+                "`usage` block is missing required fields: "
+                f"prompt_tokens={prompt_tokens!r}, "
+                f"completion_tokens={completion_tokens!r}."
+            )
+        proposal = _parse_setpoint_json(raw)
+        return LLMResponse(
             proposal=proposal,
             raw_text=raw,
+            prompt_tokens=int(prompt_tokens),
+            completion_tokens=int(completion_tokens),
         )
 
 

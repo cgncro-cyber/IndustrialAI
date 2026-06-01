@@ -8,10 +8,13 @@ import-and-instantiate tested only; the live smoke check happens in
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 from industrial_ai.agents.errors import (
     LLMEndpointUnreachableError,
+    LLMResponseMissingUsageError,
     LLMResponseParseError,
     MockLLMClientMisuseError,
 )
@@ -239,3 +242,98 @@ def test_lm_studio_client_against_dead_endpoint_raises_named_error() -> None:
     with pytest.raises(LLMEndpointUnreachableError) as exc_info:
         client.complete(system_prompt="sys", user_prompt="user")
     assert "192.0.2.1:65535" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# MLXServerLLMClient usage-block surfacing (Item 2 of the 2026-06-01 pre-
+# prompt-hardening pass). Tests inject a fake OpenAI client so the code
+# path that extracts `usage` from /v1/completions is exercised without
+# needing a live mlx_lm.server endpoint.
+# ---------------------------------------------------------------------------
+
+
+class _FakeUsageOK:
+    prompt_tokens = 137
+    completion_tokens = 42
+
+
+class _FakeChoiceOK:
+    text = '{"y_D_target": 0.99, "x_B_target": 0.01, "rationale": "ok"}'
+
+
+class _FakeReplyOK:
+    choices: ClassVar = [_FakeChoiceOK()]
+    usage: ClassVar = _FakeUsageOK()
+
+
+class _FakeCompletionsOK:
+    def create(self, **_: object) -> _FakeReplyOK:
+        return _FakeReplyOK()
+
+
+class _FakeOpenAIOK:
+    completions = _FakeCompletionsOK()
+
+
+def _build_mlx_client_with_fake(fake_openai: object) -> MLXServerLLMClient:
+    client = MLXServerLLMClient(base_url="http://fake/v1", request_timeout_s=10.0)
+    client._client = fake_openai  # type: ignore[assignment]
+    return client
+
+
+def test_mlx_client_surfaces_usage_in_llm_response() -> None:
+    """Per Item 2: prompt iteration needs per-call token counts."""
+    client = _build_mlx_client_with_fake(_FakeOpenAIOK())
+    resp = client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    assert resp.prompt_tokens == 137
+    assert resp.completion_tokens == 42
+    assert resp.proposal.y_D_target == pytest.approx(0.99)
+
+
+class _FakeReplyNoUsage:
+    choices: ClassVar = [_FakeChoiceOK()]
+    usage: ClassVar = None
+
+
+class _FakeCompletionsNoUsage:
+    def create(self, **_: object) -> _FakeReplyNoUsage:
+        return _FakeReplyNoUsage()
+
+
+class _FakeOpenAINoUsage:
+    completions = _FakeCompletionsNoUsage()
+
+
+def test_mlx_client_raises_when_usage_block_missing() -> None:
+    """ADR 010 §2: missing `usage` is a transport regression, not a default-to-zero."""
+    client = _build_mlx_client_with_fake(_FakeOpenAINoUsage())
+    with pytest.raises(LLMResponseMissingUsageError) as exc_info:
+        client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    assert "fake" in str(exc_info.value)
+
+
+class _FakeUsagePartial:
+    prompt_tokens = 100
+    completion_tokens = None  # the regression we want to catch
+
+
+class _FakeReplyPartialUsage:
+    choices: ClassVar = [_FakeChoiceOK()]
+    usage: ClassVar = _FakeUsagePartial()
+
+
+class _FakeCompletionsPartial:
+    def create(self, **_: object) -> _FakeReplyPartialUsage:
+        return _FakeReplyPartialUsage()
+
+
+class _FakeOpenAIPartial:
+    completions = _FakeCompletionsPartial()
+
+
+def test_mlx_client_raises_when_usage_field_partial() -> None:
+    """ADR 010 §2: a `usage` block with a None field is also a fail-fast."""
+    client = _build_mlx_client_with_fake(_FakeOpenAIPartial())
+    with pytest.raises(LLMResponseMissingUsageError) as exc_info:
+        client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    assert "completion_tokens" in str(exc_info.value)
