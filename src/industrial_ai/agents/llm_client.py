@@ -931,6 +931,7 @@ def build_llm_client(
     *,
     seed: int | None = None,
     temperature_override: float | None = None,
+    top_p_override: float | None = None,
     reasoning_budget_override: int | None = None,
 ) -> LLMClient:
     """Build the appropriate :class:`LLMClient` per ADR 011.
@@ -948,12 +949,15 @@ def build_llm_client(
         :class:`_MLXServerConfig` so the ablation path works without
         ``.env`` edits).
 
-    Overrides (Phase-3 variance-diagnosis pass per Schritt A.1)
-    ----------------------------------------------------------
+    Overrides (Phase-3 variance-diagnosis + DoE passes)
+    --------------------------------------------------
     ``temperature_override``
         When non-None, replaces the protocol's
         ``default_temperature`` at client construction. No effect on
         the mac-studio backend.
+    ``top_p_override``
+        When non-None, replaces the default ``top_p`` (0.95) at
+        client construction. Schritt-A.1 / DoE hyperparameter.
     ``reasoning_budget_override``
         When non-None and the resolved protocol is
         :class:`NemotronExtraBodyProtocol`, the protocol is
@@ -991,14 +995,19 @@ def build_llm_client(
             if temperature_override is not None
             else protocol.default_temperature
         )
-        return OpenAIChatLLMClient(
-            base_url=os.environ["NVIDIA_BASE_URL"],
-            api_key=os.environ["NVIDIA_API_KEY"],
-            model=model,
-            reasoning_protocol=protocol,
-            temperature=temperature,
-            seed=seed,
-        )
+        # OpenAIChatLLMClient's default top_p is 0.95 — preserve unless
+        # explicitly overridden so existing callers stay stable.
+        client_kwargs: dict[str, Any] = {
+            "base_url": os.environ["NVIDIA_BASE_URL"],
+            "api_key": os.environ["NVIDIA_API_KEY"],
+            "model": model,
+            "reasoning_protocol": protocol,
+            "temperature": temperature,
+            "seed": seed,
+        }
+        if top_p_override is not None:
+            client_kwargs["top_p"] = top_p_override
+        return OpenAIChatLLMClient(**client_kwargs)
     if backend == "mac-studio":
         # MAC_STUDIO_* default to the MLXServerLLMClient defaults so
         # the ablation path works without .env edits — but the env

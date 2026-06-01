@@ -133,6 +133,12 @@ def main() -> int:
         "Schritt-A.1 variance-diagnosis knob; no effect when omitted.",
     )
     parser.add_argument(
+        "--top-p",
+        type=float,
+        default=None,
+        help="Override the default top_p (0.95) for this run. DoE factor; no effect when omitted.",
+    )
+    parser.add_argument(
         "--reasoning-mode",
         choices=("on", "off"),
         default=None,
@@ -163,6 +169,14 @@ def main() -> int:
         help="Output JSON path; defaults to "
         "data/runs/c2_smoke/<scenario>/seed<seed>_<backend>_<model_slug>[_<run_tag>]/smoke.json.",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output directory; smoke.json is written at "
+        "{output-dir}/smoke.json. Takes priority over the auto-derived "
+        "path (DoE driver uses this).",
+    )
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
@@ -179,6 +193,7 @@ def main() -> int:
         backend=args.backend,
         seed=args.seed,
         temperature_override=args.temperature,
+        top_p_override=args.top_p,
         reasoning_budget_override=args.reasoning_budget,
     )
     endpoint = getattr(llm, "base_url", None) or getattr(
@@ -187,11 +202,12 @@ def main() -> int:
     model_for_path = getattr(llm, "model", None) or getattr(
         getattr(llm, "_cfg", None), "model", None
     )
-    output_path = (
-        args.output
-        if args.output is not None
-        else _default_output_path(args.seed, args.backend, model_for_path, args.run_tag)
-    )
+    if args.output is not None:
+        output_path = args.output
+    elif args.output_dir is not None:
+        output_path = args.output_dir / "smoke.json"
+    else:
+        output_path = _default_output_path(args.seed, args.backend, model_for_path, args.run_tag)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     p = DEFAULT_PARAMETERS
     NT = p.NT

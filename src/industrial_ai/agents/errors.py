@@ -19,6 +19,7 @@ __all__ = [
     "LLMServerError",
     "MissingAPIKeyError",
     "MissingBackendConfigError",
+    "MissingConfirmationSpecError",
     "MissingUsageError",
     "MockLLMClientMisuseError",
     "RegulatoryBackendError",
@@ -115,6 +116,17 @@ class UnknownReasoningProtocolError(AgentError):
     default to a marker-style protocol — different reasoning
     families have different on/off conventions and a silent default
     would produce wrong-shaped requests against a wrong-shaped API.
+    """
+
+
+class MissingConfirmationSpecError(AgentError):
+    """``run_doe_confirmation.py`` was invoked but no ``confirmation_spec.json`` exists.
+
+    Per ADR 010 §2, the missing artifact indicates an upstream
+    analysis failure rather than a recovery scenario — the DoE
+    analysis step is responsible for producing the spec. The
+    confirmation driver fails fast so the operator can fix the
+    upstream issue rather than re-run with a wrong / stale spec.
     """
 
 

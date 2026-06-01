@@ -874,6 +874,29 @@ def test_build_llm_client_nim_reasoning_budget_override(
     assert c.reasoning_protocol.reasoning_budget == 2048
 
 
+def test_build_llm_client_nim_top_p_override(
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
+) -> None:
+    """DoE: --top-p override propagates to the client."""
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    c = build_llm_client(backend="nim", top_p_override=0.8)
+    assert isinstance(c, OpenAIChatLLMClient)
+    assert c.top_p == pytest.approx(0.8)
+
+
+def test_build_llm_client_nim_top_p_override_none_keeps_client_default(
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
+) -> None:
+    """When top_p_override=None the OpenAIChatLLMClient default (0.95) applies."""
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    c = build_llm_client(backend="nim", top_p_override=None)
+    assert c.top_p == pytest.approx(0.95)
+
+
 def test_build_llm_client_nim_reasoning_budget_override_noop_on_marker(
     monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
 ) -> None:
