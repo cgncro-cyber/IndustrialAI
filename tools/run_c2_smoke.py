@@ -31,6 +31,11 @@ from typing import Any
 
 import numpy as np
 
+from industrial_ai.agents.errors import (
+    LLMEndpointUnreachableError,
+    LLMResponseMissingUsageError,
+    LLMResponseParseError,
+)
 from industrial_ai.agents.graph import AgentRunner, GraphConfig
 from industrial_ai.agents.llm_client import MLXServerLLMClient
 from industrial_ai.agents.regulatory_backend import build_regulatory_backend
@@ -109,21 +114,37 @@ def main() -> int:
         f"{'wall_s':>7} {'verdict':>8}"
     )
     cycles: list[dict[str, Any]] = []
+    abort_at_cycle: int | None = None
+    abort_reason: str | None = None
     t_total_start = time.perf_counter()
     for i in range(n_ticks):
         t_min = i * args.tick_min
         y_D_pre = float(X[NT - 1])
         x_B_pre = float(X[0])
-        out = runner.step(
-            cycle_index=i,
-            t_min=t_min,
-            X=X,
-            LT_kmol_per_min=p.nominal_reflux_L0_kmol_per_min,
-            VB_kmol_per_min=p.nominal_boilup_V0_kmol_per_min,
-            F_kmol_per_min=p.nominal_feed_F_kmol_per_min,
-            zF=0.5,
-            qF=p.nominal_feed_liquid_fraction_qF,
-        )
+        # ADR 010 §2: fail-fast on LLM transport / parse errors, but
+        # preserve the partial diagnostic trace — those collected
+        # cycles ARE the signal the prompt iteration is asking for.
+        try:
+            out = runner.step(
+                cycle_index=i,
+                t_min=t_min,
+                X=X,
+                LT_kmol_per_min=p.nominal_reflux_L0_kmol_per_min,
+                VB_kmol_per_min=p.nominal_boilup_V0_kmol_per_min,
+                F_kmol_per_min=p.nominal_feed_F_kmol_per_min,
+                zF=0.5,
+                qF=p.nominal_feed_liquid_fraction_qF,
+            )
+        except (
+            LLMResponseParseError,
+            LLMResponseMissingUsageError,
+            LLMEndpointUnreachableError,
+        ) as exc:
+            abort_at_cycle = i
+            abort_reason = f"{type(exc).__name__}: {exc!s:.500s}"
+            print(f"\n!! ABORT at cycle {i}: {type(exc).__name__}", flush=True)
+            print(f"   reason: {str(exc)[:200]}...", flush=True)
+            break
         decision = out.state.decision
         y_target = float(decision.y_D_target) if decision else float("nan")
         x_target = float(decision.x_B_target) if decision else float("nan")
@@ -167,11 +188,19 @@ def main() -> int:
     total_wall_s = time.perf_counter() - t_total_start
     aggregate_iae = float(runner._canonical_aggregate_iae)
     internal_tracking_iae = float(runner._internal_tracking_iae)
-    cycle_walls = [c["wall_clock_seconds"] for c in cycles]
-    completion_tokens = [c["completion_tokens"] for c in cycles]
-    prompt_tokens = [c["prompt_tokens"] for c in cycles]
+    if not cycles:
+        # Nothing to summarise (failed before cycle 0). Surface bluntly.
+        print("\n!! No cycles completed — see abort_reason in output.", flush=True)
+        cycle_walls = [0.0]
+        completion_tokens = [0]
+        prompt_tokens = [0]
+    else:
+        cycle_walls = [c["wall_clock_seconds"] for c in cycles]
+        completion_tokens = [c["completion_tokens"] for c in cycles]
+        prompt_tokens = [c["prompt_tokens"] for c in cycles]
+    status = "DONE" if abort_at_cycle is None else f"PARTIAL (aborted at cycle {abort_at_cycle})"
     print(
-        f"\nDONE: {n_ticks} cycles, "
+        f"\n{status}: {len(cycles)}/{n_ticks} cycles, "
         f"canonical IAE = {aggregate_iae:.5f}, "
         f"internal tracking IAE = {internal_tracking_iae:.5f}, "
         f"total wall = {total_wall_s:.1f} s, "
@@ -210,16 +239,21 @@ def main() -> int:
             "completion_tokens_p95": int(np.percentile(completion_tokens, 95)),
             "completion_tokens_max": int(max(completion_tokens)),
             "completed_cycles": runner._completed_cycles,
+            "aborted_at_cycle": abort_at_cycle,
+            "abort_reason": abort_reason,
             "all_regulatory_simulations_succeeded": all(
                 c["regulatory_simulation_success"] for c in cycles
-            ),
+            )
+            if cycles
+            else False,
         },
         "cycles": cycles,
     }
     with args.output.open("w") as fh:
         json.dump(payload, fh, indent=2)
     print(f"wrote {args.output}")
-    return 0
+    # ADR 010: a partial run is non-zero exit so CI surfaces it.
+    return 0 if abort_at_cycle is None else 2
 
 
 if __name__ == "__main__":
