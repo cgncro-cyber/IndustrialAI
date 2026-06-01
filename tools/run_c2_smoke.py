@@ -80,9 +80,13 @@ def main() -> int:
     print(f"git_sha:  {_git_sha()}")
 
     llm = MLXServerLLMClient(base_url=args.base_url, request_timeout_s=180.0)
+    # nominal_baseline has no disturbance — canonical kpis.md §1.1
+    # targets are the nominal SS values.
     runner = AgentRunner(
         llm_client=llm,
         regulatory_backend=build_regulatory_backend("mpc"),
+        canonical_y_D_target=0.99,
+        canonical_x_B_target=0.01,
         config=GraphConfig(supervisor_period_min=args.tick_min),
     )
 
@@ -146,10 +150,13 @@ def main() -> int:
         )
 
     total_wall_s = time.perf_counter() - t_total_start
-    aggregate_iae = float(runner._aggregate_iae)
+    aggregate_iae = float(runner._canonical_aggregate_iae)
+    internal_tracking_iae = float(runner._internal_tracking_iae)
     cycle_walls = [c["wall_clock_seconds"] for c in cycles]
     print(
-        f"\nDONE: {n_ticks} cycles, aggregate IAE = {aggregate_iae:.5f}, "
+        f"\nDONE: {n_ticks} cycles, "
+        f"canonical IAE = {aggregate_iae:.5f}, "
+        f"internal tracking IAE = {internal_tracking_iae:.5f}, "
         f"total wall = {total_wall_s:.1f} s, "
         f"per-cycle wall P50/P95/max = "
         f"{np.percentile(cycle_walls, 50):.2f}/{np.percentile(cycle_walls, 95):.2f}/{max(cycle_walls):.2f} s"
@@ -173,6 +180,7 @@ def main() -> int:
         },
         "aggregate": {
             "iae_mole_fraction_min": aggregate_iae,
+            "internal_tracking_iae_mole_fraction_min": internal_tracking_iae,
             "total_wall_clock_seconds": total_wall_s,
             "cycle_wall_clock_seconds_p50": float(np.percentile(cycle_walls, 50)),
             "cycle_wall_clock_seconds_p95": float(np.percentile(cycle_walls, 95)),

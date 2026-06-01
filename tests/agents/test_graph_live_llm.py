@@ -147,6 +147,10 @@ def test_live_two_cycle_runner_accumulates_iae(
     runner = AgentRunner(
         llm_client=live_mlx_client,
         regulatory_backend=build_regulatory_backend("mpc"),
+        # canonical targets — nominal SS for tests not exercising
+        # scenario-specific IAE
+        canonical_y_D_target=0.99,
+        canonical_x_B_target=0.01,
     )
     p = DEFAULT_PARAMETERS
     out1 = runner.step(
@@ -159,7 +163,7 @@ def test_live_two_cycle_runner_accumulates_iae(
         zF=0.5,
         qF=1.0,
     )
-    iae_after_one = runner._aggregate_iae
+    iae_after_one = runner._canonical_aggregate_iae
     assert runner._completed_cycles == 1
     assert iae_after_one >= 0.0
 
@@ -174,4 +178,4 @@ def test_live_two_cycle_runner_accumulates_iae(
         qF=1.0,
     )
     assert runner._completed_cycles == 2
-    assert runner._aggregate_iae >= iae_after_one
+    assert runner._canonical_aggregate_iae >= iae_after_one

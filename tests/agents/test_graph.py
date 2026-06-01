@@ -135,6 +135,10 @@ def test_escalation_falls_back_to_previous_accepted(nominal_X: np.ndarray) -> No
     runner = AgentRunner(
         llm_client=MockLLMClient(policy="nominal"),
         regulatory_backend=build_regulatory_backend("mpc"),
+        # canonical targets — nominal SS for tests not exercising
+        # scenario-specific IAE
+        canonical_y_D_target=0.99,
+        canonical_x_B_target=0.01,
         config=cfg,
     )
     p = DEFAULT_PARAMETERS
@@ -169,13 +173,86 @@ def test_escalation_falls_back_to_previous_accepted(nominal_X: np.ndarray) -> No
     assert out2.regulatory_result.X_final[NT - 1] == pytest.approx(0.99, abs=5e-3)
 
 
+def test_runner_construction_without_canonical_targets_raises_type_error() -> None:
+    """ADR 010 §2: canonical kpis.md §1.1 targets are required, no defaults.
+
+    Omitting them must raise the standard ``TypeError`` for a missing
+    required argument rather than silently defaulting to the nominal
+    SS values — which would mis-attribute IAE on every non-nominal
+    scenario.
+    """
+    with pytest.raises(TypeError):
+        AgentRunner(  # type: ignore[call-arg]
+            llm_client=MockLLMClient(policy="nominal"),
+            regulatory_backend=build_regulatory_backend("mpc"),
+        )
+
+
+def test_canonical_and_internal_iae_match_closed_form_integral(
+    nominal_X: np.ndarray,
+) -> None:
+    """``_canonical_aggregate_iae`` integrates the |trajectory - canonical|
+    error; ``_internal_tracking_iae`` integrates |trajectory - decision|
+    error. Both must match the closed-form trapezoidal sum to
+    machine precision so prompt iteration can trust the numbers.
+
+    Pick canonical targets ``(0.97, 0.02)`` that deliberately differ
+    from the nominal mock's chosen targets ``(0.99, 0.01)`` so the
+    two accumulators yield distinguishable values.
+    """
+    runner = AgentRunner(
+        llm_client=MockLLMClient(policy="nominal"),
+        regulatory_backend=build_regulatory_backend("mpc"),
+        canonical_y_D_target=0.97,
+        canonical_x_B_target=0.02,
+    )
+    p = DEFAULT_PARAMETERS
+    out = runner.step(
+        cycle_index=0,
+        t_min=0.0,
+        X=nominal_X,
+        LT_kmol_per_min=p.nominal_reflux_L0_kmol_per_min,
+        VB_kmol_per_min=p.nominal_boilup_V0_kmol_per_min,
+        F_kmol_per_min=1.0,
+        zF=0.5,
+        qF=1.0,
+    )
+    sim = out.regulatory_result.simulation
+    assert sim.success
+    NT = DEFAULT_PARAMETERS.NT
+    dt_intervals = np.diff(sim.t)
+    yD_traj = sim.X[1:, NT - 1]
+    xB_traj = sim.X[1:, 0]
+
+    expected_canonical = float(
+        np.sum(np.abs(yD_traj - 0.97) * dt_intervals)
+        + np.sum(np.abs(xB_traj - 0.02) * dt_intervals)
+    )
+    decision = out.state.decision
+    assert decision is not None
+    expected_internal = float(
+        np.sum(np.abs(yD_traj - decision.y_D_target) * dt_intervals)
+        + np.sum(np.abs(xB_traj - decision.x_B_target) * dt_intervals)
+    )
+    assert runner._canonical_aggregate_iae == pytest.approx(expected_canonical, rel=1e-12)
+    assert runner._internal_tracking_iae == pytest.approx(expected_internal, rel=1e-12)
+    # The two semantics MUST diverge when canonical != decision —
+    # otherwise the diagnostic accumulator is redundant. Nominal mock
+    # picks (0.99, 0.01); canonical is (0.97, 0.02).
+    assert runner._canonical_aggregate_iae != pytest.approx(runner._internal_tracking_iae)
+
+
 def test_runner_accumulates_iae_over_cycles(nominal_X: np.ndarray) -> None:
     runner = AgentRunner(
         llm_client=MockLLMClient(policy="nominal"),
         regulatory_backend=build_regulatory_backend("mpc"),
+        # canonical targets — nominal SS for tests not exercising
+        # scenario-specific IAE
+        canonical_y_D_target=0.99,
+        canonical_x_B_target=0.01,
     )
     p = DEFAULT_PARAMETERS
-    iae_before = runner._aggregate_iae
+    iae_before = runner._canonical_aggregate_iae
     runner.step(
         cycle_index=0,
         t_min=0.0,
@@ -186,7 +263,7 @@ def test_runner_accumulates_iae_over_cycles(nominal_X: np.ndarray) -> None:
         zF=0.5,
         qF=1.0,
     )
-    assert runner._aggregate_iae >= iae_before
+    assert runner._canonical_aggregate_iae >= iae_before
     assert runner._completed_cycles == 1
 
 

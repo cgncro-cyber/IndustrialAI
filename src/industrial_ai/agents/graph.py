@@ -381,13 +381,33 @@ class AgentRunner:
     accepted proposal (for escalation fallback), and per-cycle KPI
     accumulation. The bulk of the per-cycle logic lives in
     :func:`run_one_cycle`.
+
+    ``canonical_y_D_target`` and ``canonical_x_B_target`` are the
+    reference values against which the ``docs/kpis.md`` §1.1 IAE is
+    accumulated. They are scenario-defined (not agent-chosen) and must
+    match the scenario's canonical targets per the §1.1 contract — for
+    disturbance-rejection scenarios, the nominal SS values
+    ``(0.99, 0.01)``; for ``yD_setpoint_+0p5pct``, the stepped
+    setpoint. Required at construction (no defaults) per ADR 010 §2;
+    omitting them raises ``TypeError`` rather than silently defaulting
+    to the nominal SS.
     """
 
     llm_client: LLMClient
     regulatory_backend: RegulatoryBackend
+    canonical_y_D_target: float
+    canonical_x_B_target: float
     config: GraphConfig = field(default_factory=GraphConfig)
     _previous_accepted: OptimizerProposal | None = None
-    _aggregate_iae: float = 0.0
+    #: Canonical IAE accumulated against the scenario-defined targets
+    #: (``canonical_y_D_target``, ``canonical_x_B_target``). This is
+    #: the ``kpis.md`` §1.1 headline KPI, comparable across C0/C1/C2/C3.
+    _canonical_aggregate_iae: float = 0.0
+    #: Internal MPC tracking gap to the agent's OWN chosen targets.
+    #: Diagnostic only — not the ``kpis.md`` §1.1 KPI. Useful for
+    #: spotting when the agent picks targets the regulatory layer
+    #: cannot actually reach.
+    _internal_tracking_iae: float = 0.0
     _completed_cycles: int = 0
 
     def step(
@@ -412,7 +432,7 @@ class AgentRunner:
             F_kmol_per_min=F_kmol_per_min,
             zF=zF,
             qF=qF,
-            recent_aggregate_iae=self._aggregate_iae,
+            recent_aggregate_iae=self._canonical_aggregate_iae,
             llm_client=self.llm_client,
             regulatory_backend=self.regulatory_backend,
             previous_accepted=self._previous_accepted,
@@ -427,18 +447,25 @@ class AgentRunner:
             self._previous_accepted = outcome.state.decision
         sim = outcome.regulatory_result.simulation
         if sim.success:
+            decision = outcome.state.decision
+            # Invariant: run_one_cycle raises CriticLoopLimitError when
+            # no decision can be reached, so a successful regulatory
+            # simulation implies a non-None decision. ADR 010 §2:
+            # asserted, not silently defaulted.
+            assert decision is not None
             NT = DEFAULT_PARAMETERS.NT
-            y_target = (
-                outcome.state.decision.y_D_target if outcome.state.decision is not None else 0.99
-            )
-            x_target = (
-                outcome.state.decision.x_B_target if outcome.state.decision is not None else 0.01
-            )
             dt_intervals = np.diff(sim.t)
-            iae = float(
-                np.sum(np.abs(sim.X[1:, NT - 1] - y_target) * dt_intervals)
-                + np.sum(np.abs(sim.X[1:, 0] - x_target) * dt_intervals)
+            yD_trajectory = sim.X[1:, NT - 1]
+            xB_trajectory = sim.X[1:, 0]
+            canonical_iae = float(
+                np.sum(np.abs(yD_trajectory - self.canonical_y_D_target) * dt_intervals)
+                + np.sum(np.abs(xB_trajectory - self.canonical_x_B_target) * dt_intervals)
             )
-            self._aggregate_iae += iae
+            self._canonical_aggregate_iae += canonical_iae
+            internal_iae = float(
+                np.sum(np.abs(yD_trajectory - decision.y_D_target) * dt_intervals)
+                + np.sum(np.abs(xB_trajectory - decision.x_B_target) * dt_intervals)
+            )
+            self._internal_tracking_iae += internal_iae
         self._completed_cycles += 1
         return outcome
