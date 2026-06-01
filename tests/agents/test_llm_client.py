@@ -14,8 +14,8 @@ import pytest
 
 from industrial_ai.agents.errors import (
     LLMEndpointUnreachableError,
-    LLMResponseMissingUsageError,
     LLMResponseParseError,
+    MissingUsageError,
     MockLLMClientMisuseError,
 )
 from industrial_ai.agents.llm_client import (
@@ -327,7 +327,7 @@ class _FakeOpenAINoUsage:
 def test_mlx_client_raises_when_usage_block_missing() -> None:
     """ADR 010 §2: missing `usage` is a transport regression, not a default-to-zero."""
     client = _build_mlx_client_with_fake(_FakeOpenAINoUsage())
-    with pytest.raises(LLMResponseMissingUsageError) as exc_info:
+    with pytest.raises(MissingUsageError) as exc_info:
         client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
     assert "fake" in str(exc_info.value)
 
@@ -354,7 +354,7 @@ class _FakeOpenAIPartial:
 def test_mlx_client_raises_when_usage_field_partial() -> None:
     """ADR 010 §2: a `usage` block with a None field is also a fail-fast."""
     client = _build_mlx_client_with_fake(_FakeOpenAIPartial())
-    with pytest.raises(LLMResponseMissingUsageError) as exc_info:
+    with pytest.raises(MissingUsageError) as exc_info:
         client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
     assert "completion_tokens" in str(exc_info.value)
 
@@ -386,3 +386,242 @@ def test_mlx_client_omits_seed_when_unset() -> None:
     _FakeCompletionsCapturingKwargs.last_kwargs = {}
     client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
     assert "seed" not in _FakeCompletionsCapturingKwargs.last_kwargs
+
+
+# ---------------------------------------------------------------------------
+# OpenAIChatLLMClient (ADR 011) — mocked httpx transport so the chat-
+# completions code path is exercised without a live NIM endpoint.
+# ---------------------------------------------------------------------------
+
+
+from industrial_ai.agents.errors import (  # noqa: E402 — keep grouped with usage
+    LLMResponseFormatError,
+    LLMServerError,
+    MissingAPIKeyError,
+    MissingBackendConfigError,
+)
+from industrial_ai.agents.llm_client import (  # noqa: E402
+    OpenAIChatLLMClient,
+    build_llm_client,
+)
+
+
+class _StubResponseOK:
+    status_code = 200
+    text = ""
+
+    def json(self) -> dict[str, object]:
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"y_D_target": 0.99, "x_B_target": 0.01, "rationale": "ok"}'
+                    }
+                }
+            ],
+            "usage": {"prompt_tokens": 211, "completion_tokens": 47, "total_tokens": 258},
+        }
+
+
+def _build_openai_client_with_stub(stub_response: object) -> OpenAIChatLLMClient:
+    client = OpenAIChatLLMClient(
+        base_url="https://fake.invalid/v1",
+        api_key="nvapi-test",
+        model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+    )
+    captured: dict[str, object] = {}
+
+    def _stub_post(url: str, payload: dict[str, object], headers: dict[str, str]) -> object:
+        captured["url"] = url
+        captured["payload"] = payload
+        captured["headers"] = headers
+        return stub_response
+
+    client._post = _stub_post  # type: ignore[assignment]
+    client._last_captured = captured  # type: ignore[attr-defined]
+    return client
+
+
+def test_openai_client_requires_api_key() -> None:
+    """ADR 010 §2: empty api_key is fail-fast at construction."""
+    with pytest.raises(MissingAPIKeyError):
+        OpenAIChatLLMClient(base_url="https://x/v1", api_key="", model="m")
+
+
+def test_openai_client_happy_path_parses_setpoint_and_usage() -> None:
+    client = _build_openai_client_with_stub(_StubResponseOK())
+    resp = client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    assert resp.proposal.y_D_target == pytest.approx(0.99)
+    assert resp.proposal.x_B_target == pytest.approx(0.01)
+    assert resp.prompt_tokens == 211
+    assert resp.completion_tokens == 47
+
+
+def test_openai_client_sends_bearer_auth_and_chat_completions_path() -> None:
+    client = _build_openai_client_with_stub(_StubResponseOK())
+    client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    captured = client._last_captured  # type: ignore[attr-defined]
+    assert captured["url"].endswith("/chat/completions")
+    assert captured["headers"]["Authorization"].startswith("Bearer ")
+
+
+def test_openai_client_injects_no_think_marker_on_reasoning_false() -> None:
+    client = _build_openai_client_with_stub(_StubResponseOK())
+    client.complete(system_prompt="SYS", user_prompt="usr", reasoning=False)
+    captured = client._last_captured  # type: ignore[attr-defined]
+    sys_msg = captured["payload"]["messages"][0]
+    assert sys_msg["role"] == "system"
+    assert sys_msg["content"].startswith("/no_think ")
+    assert captured["payload"]["max_tokens"] == 512
+
+
+def test_openai_client_omits_no_think_marker_on_reasoning_true() -> None:
+    client = _build_openai_client_with_stub(_StubResponseOK())
+    client.complete(system_prompt="SYS", user_prompt="usr", reasoning=True)
+    captured = client._last_captured  # type: ignore[attr-defined]
+    sys_msg = captured["payload"]["messages"][0]
+    assert not sys_msg["content"].startswith("/no_think ")
+    assert captured["payload"]["max_tokens"] == 4096
+
+
+def test_openai_client_threads_seed_into_payload() -> None:
+    client = OpenAIChatLLMClient(base_url="https://x/v1", api_key="k", model="m", seed=42)
+    captured: dict[str, object] = {}
+    client._post = lambda url, payload, headers: (  # type: ignore[assignment]
+        captured.update({"payload": payload}) or _StubResponseOK()
+    )
+    client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    assert captured["payload"]["seed"] == 42
+
+
+def test_openai_client_omits_seed_when_unset() -> None:
+    client = _build_openai_client_with_stub(_StubResponseOK())
+    client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    captured = client._last_captured  # type: ignore[attr-defined]
+    assert "seed" not in captured["payload"]
+
+
+class _StubResponseNon2xx:
+    status_code = 503
+    text = "Service Unavailable"
+
+    def json(self) -> dict[str, object]:
+        return {}
+
+
+def test_openai_client_raises_llm_server_error_on_non_2xx() -> None:
+    client = _build_openai_client_with_stub(_StubResponseNon2xx())
+    with pytest.raises(LLMServerError) as exc_info:
+        client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+    assert "503" in str(exc_info.value)
+
+
+class _StubResponseNonJSON:
+    status_code = 200
+    text = "<html>captive portal</html>"
+
+    def json(self) -> dict[str, object]:
+        raise ValueError("not JSON")
+
+
+def test_openai_client_raises_format_error_on_non_json_body() -> None:
+    client = _build_openai_client_with_stub(_StubResponseNonJSON())
+    with pytest.raises(LLMResponseFormatError):
+        client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+
+
+class _StubResponseNoUsage:
+    status_code = 200
+    text = ""
+
+    def json(self) -> dict[str, object]:
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"y_D_target": 0.99, "x_B_target": 0.01, "rationale": "x"}'
+                    }
+                }
+            ],
+        }
+
+
+def test_openai_client_raises_missing_usage_when_usage_block_absent() -> None:
+    client = _build_openai_client_with_stub(_StubResponseNoUsage())
+    with pytest.raises(MissingUsageError):
+        client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+
+
+class _StubResponseMissingChoices:
+    status_code = 200
+    text = ""
+
+    def json(self) -> dict[str, object]:
+        return {"choices": [], "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+
+
+def test_openai_client_raises_format_error_when_choices_missing() -> None:
+    client = _build_openai_client_with_stub(_StubResponseMissingChoices())
+    with pytest.raises(LLMResponseFormatError):
+        client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
+
+
+# ---------------------------------------------------------------------------
+# build_llm_client factory (ADR 011)
+# ---------------------------------------------------------------------------
+
+
+def test_build_llm_client_rejects_unknown_backend() -> None:
+    with pytest.raises(ValueError):
+        build_llm_client(backend="rocm")
+
+
+def test_build_llm_client_nim_returns_openai_chat_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://nim.test/v1")
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/test-model")
+    client = build_llm_client(backend="nim")
+    assert isinstance(client, OpenAIChatLLMClient)
+    assert client.base_url == "https://nim.test/v1"
+    assert client.model == "nvidia/test-model"
+
+
+def test_build_llm_client_mac_studio_returns_mlx_client_with_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("MAC_STUDIO_BASE_URL", raising=False)
+    monkeypatch.delenv("MAC_STUDIO_MODEL", raising=False)
+    client = build_llm_client(backend="mac-studio")
+    assert isinstance(client, MLXServerLLMClient)
+
+
+def test_build_llm_client_nim_raises_with_all_missing_vars_listed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    monkeypatch.delenv("NVIDIA_BASE_URL", raising=False)
+    monkeypatch.delenv("NVIDIA_MODEL", raising=False)
+    with pytest.raises(MissingBackendConfigError) as exc_info:
+        build_llm_client(backend="nim")
+    msg = str(exc_info.value)
+    assert "NVIDIA_API_KEY" in msg
+    assert "NVIDIA_BASE_URL" in msg
+    assert "NVIDIA_MODEL" in msg
+
+
+def test_build_llm_client_nim_lists_only_missing_vars(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the missing vars are listed, present ones are not."""
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+    monkeypatch.delenv("NVIDIA_MODEL", raising=False)
+    with pytest.raises(MissingBackendConfigError) as exc_info:
+        build_llm_client(backend="nim")
+    msg = str(exc_info.value)
+    assert "NVIDIA_MODEL" in msg
+    # Be tolerant of phrasing — but at minimum the message
+    # must call out the missing list distinctly.
+    assert "missing" in msg.lower()

@@ -40,6 +40,13 @@ dependencies = [
     # (http://localhost:1234/v1). Framework-agnostic: also works with
     # Ollama, vLLM, llama.cpp server, or remote providers without code changes.
     "langchain-openai>=0.2",
+    # HTTP transport used directly by OpenAIChatLLMClient against NIM
+    # (ADR 011). Already present transitively via openai SDK; declared
+    # explicitly here so the dep graph reflects the direct dependency.
+    "httpx>=0.28",
+    # .env loader for the build_llm_client factory (ADR 011) — keeps
+    # NIM api keys out of the source tree.
+    "python-dotenv>=1.0",
     # ML / anomaly detection
     "scikit-learn>=1.4",
     "torch>=2.2",

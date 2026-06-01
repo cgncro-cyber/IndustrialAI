@@ -30,8 +30,12 @@ from typing import Any
 
 from industrial_ai.agents.errors import (
     LLMEndpointUnreachableError,
-    LLMResponseMissingUsageError,
+    LLMResponseFormatError,
     LLMResponseParseError,
+    LLMServerError,
+    MissingAPIKeyError,
+    MissingBackendConfigError,
+    MissingUsageError,
     MockLLMClientMisuseError,
 )
 from industrial_ai.agents.state import SETPOINT_BOUNDS
@@ -43,6 +47,8 @@ __all__ = [
     "LMStudioLLMClient",
     "MLXServerLLMClient",
     "MockLLMClient",
+    "OpenAIChatLLMClient",
+    "build_llm_client",
 ]
 
 _DEFAULT_NOMINAL_TARGETS = {"y_D_target": 0.99, "x_B_target": 0.01}
@@ -510,14 +516,14 @@ class MLXServerLLMClient(LLMClient):
         # in Phase-3 prompt iteration.
         usage = getattr(reply, "usage", None)
         if usage is None:
-            raise LLMResponseMissingUsageError(
+            raise MissingUsageError(
                 f"mlx_lm.server response from {self._cfg.base_url!r} "
                 "missing the documented `usage` block."
             )
         prompt_tokens = getattr(usage, "prompt_tokens", None)
         completion_tokens = getattr(usage, "completion_tokens", None)
         if prompt_tokens is None or completion_tokens is None:
-            raise LLMResponseMissingUsageError(
+            raise MissingUsageError(
                 f"mlx_lm.server response from {self._cfg.base_url!r} "
                 "`usage` block is missing required fields: "
                 f"prompt_tokens={prompt_tokens!r}, "
@@ -530,6 +536,219 @@ class MLXServerLLMClient(LLMClient):
             prompt_tokens=int(prompt_tokens),
             completion_tokens=int(completion_tokens),
         )
+
+
+# ---------------------------------------------------------------------------
+# OpenAI-Chat-API backend (ADR 011, NIM primary).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class OpenAIChatLLMClient(LLMClient):
+    """Standard OpenAI ``/v1/chat/completions`` transport, used against NIM.
+
+    Per ADR 011, this is the Phase-3 primary inference path.
+    Server-side chat-template rendering (no client-side jinja2
+    render, unlike :class:`MLXServerLLMClient`) — the vLLM backend
+    on NIM correctly handles Nemotron's chat template, so we just
+    POST a ``messages`` array and receive parsed assistant content.
+
+    The ``reasoning`` modal convention follows ADR 005 amendment:
+    ``reasoning=False`` prefixes the system content with
+    ``/no_think`` (Nemotron's chat template detects it and stubs
+    the ``<think></think>`` block) and uses a ~512-token budget;
+    ``reasoning=True`` omits the marker and raises the budget to
+    4096.
+
+    ADR 010 §2: single attempt, no retry. Named errors:
+
+    - :class:`MissingAPIKeyError` at construction time when
+      ``api_key`` is empty.
+    - :class:`LLMServerError` on non-2xx HTTP responses
+      (includes status code and body excerpt).
+    - :class:`LLMResponseFormatError` when the response body is
+      not parseable as JSON.
+    - :class:`LLMEndpointUnreachableError` on connection / timeout
+      failures (httpx-level transport errors).
+    - :class:`MissingUsageError` if the response is missing the
+      OpenAI-spec ``usage`` block or any required field of it.
+    - :class:`LLMResponseParseError` if the assistant ``content``
+      field does not contain a parseable setpoint JSON object.
+    """
+
+    base_url: str
+    api_key: str
+    model: str
+    request_timeout_s: float = 180.0
+    seed: int | None = None
+    name: str = "openai_chat"
+
+    def __post_init__(self) -> None:
+        if not self.api_key:
+            raise MissingAPIKeyError(
+                f"OpenAIChatLLMClient against {self.base_url!r} constructed "
+                "without an API key. ADR 010 §2: empty-string / None keys are "
+                "fail-fast at construction, not at first network call."
+            )
+
+    def complete(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int | None = None,
+        temperature: float = 0.6,
+        top_p: float = 0.95,
+        reasoning: bool = False,
+    ) -> LLMResponse:
+        # Modal reasoning convention per ADR 005 amendment 2026-05-28,
+        # preserved across backends (Nemotron honors the marker
+        # server-side because the chat template is the same).
+        if reasoning:
+            effective_system_content = system_prompt
+            effective_max_tokens = max_tokens if max_tokens is not None else 4096
+        else:
+            effective_system_content = "/no_think " + system_prompt
+            effective_max_tokens = max_tokens if max_tokens is not None else 512
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": effective_system_content},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": effective_max_tokens,
+        }
+        if self.seed is not None:
+            payload["seed"] = self.seed
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        url = self.base_url.rstrip("/") + "/chat/completions"
+        # ADR 010 §2: single attempt. Transport-level connection /
+        # timeout failures map to LLMEndpointUnreachableError to
+        # match the contract surface used by the rest of the agent.
+        import httpx
+
+        try:
+            response = self._post(url, payload, headers)
+        except httpx.RequestError as exc:
+            raise LLMEndpointUnreachableError(
+                f"OpenAI-Chat-API endpoint {self.base_url!r} unreachable: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        if response.status_code >= 400:
+            body_excerpt = response.text[:500]
+            raise LLMServerError(
+                f"OpenAI-Chat-API endpoint {self.base_url!r} returned "
+                f"HTTP {response.status_code}: {body_excerpt!r}"
+            )
+        try:
+            response_json = response.json()
+        except ValueError as exc:
+            raise LLMResponseFormatError(
+                f"OpenAI-Chat-API endpoint {self.base_url!r} returned a "
+                f"non-JSON body: {response.text[:300]!r}"
+            ) from exc
+        try:
+            content = response_json["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise LLMResponseFormatError(
+                f"OpenAI-Chat-API response from {self.base_url!r} missing "
+                f"`choices[0].message.content`: {response_json!r}"
+            ) from exc
+        usage = response_json.get("usage")
+        if usage is None:
+            raise MissingUsageError(
+                f"OpenAI-Chat-API response from {self.base_url!r} missing "
+                "the documented `usage` block."
+            )
+        prompt_tokens = usage.get("prompt_tokens")
+        completion_tokens = usage.get("completion_tokens")
+        if prompt_tokens is None or completion_tokens is None:
+            raise MissingUsageError(
+                f"OpenAI-Chat-API response from {self.base_url!r} `usage` "
+                "block missing required fields: "
+                f"prompt_tokens={prompt_tokens!r}, "
+                f"completion_tokens={completion_tokens!r}."
+            )
+        proposal = _parse_setpoint_json(content)
+        return LLMResponse(
+            proposal=proposal,
+            raw_text=content,
+            prompt_tokens=int(prompt_tokens),
+            completion_tokens=int(completion_tokens),
+        )
+
+    def _post(self, url: str, payload: dict[str, Any], headers: dict[str, str]) -> Any:
+        """Indirection layer so unit tests can monkeypatch the HTTP call."""
+        import httpx
+
+        with httpx.Client(timeout=self.request_timeout_s) as client:
+            return client.post(url, json=payload, headers=headers)
+
+
+# ---------------------------------------------------------------------------
+# Backend factory (ADR 011).
+# ---------------------------------------------------------------------------
+
+
+def build_llm_client(backend: str, *, seed: int | None = None) -> LLMClient:
+    """Build the appropriate :class:`LLMClient` per ADR 011.
+
+    Loads ``.env`` from project root via ``python-dotenv`` (idempotent
+    across calls — ``load_dotenv()`` is safe to invoke repeatedly).
+
+    Required env vars
+    -----------------
+    ``backend="nim"``
+        ``NVIDIA_API_KEY``, ``NVIDIA_BASE_URL``, ``NVIDIA_MODEL``.
+    ``backend="mac-studio"``
+        ``MAC_STUDIO_BASE_URL``, ``MAC_STUDIO_MODEL`` (both optional,
+        defaulting to the values from
+        :class:`_MLXServerConfig` so the ablation path works without
+        ``.env`` edits).
+
+    Raises
+    ------
+    MissingBackendConfigError
+        If one or more required vars are missing for the selected
+        backend. All missing vars are listed in a single message so
+        the operator can fix the ``.env`` in one pass.
+    ValueError
+        If ``backend`` is not one of the known values.
+    """
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    if backend == "nim":
+        required = ("NVIDIA_API_KEY", "NVIDIA_BASE_URL", "NVIDIA_MODEL")
+        missing = [name for name in required if not os.environ.get(name)]
+        if missing:
+            raise MissingBackendConfigError(
+                f"backend='nim' requires env vars {required!r} but the "
+                f"following are missing or empty: {missing!r}. Populate "
+                "them in .env (project root) per ADR 011."
+            )
+        return OpenAIChatLLMClient(
+            base_url=os.environ["NVIDIA_BASE_URL"],
+            api_key=os.environ["NVIDIA_API_KEY"],
+            model=os.environ["NVIDIA_MODEL"],
+            seed=seed,
+        )
+    if backend == "mac-studio":
+        # MAC_STUDIO_* default to the MLXServerLLMClient defaults so
+        # the ablation path works without .env edits — but the env
+        # var, if set, overrides.
+        base_url = os.environ.get("MAC_STUDIO_BASE_URL") or _MLXServerConfig.base_url
+        model = os.environ.get("MAC_STUDIO_MODEL") or _MLXServerConfig.model
+        return MLXServerLLMClient(base_url=base_url, model=model, seed=seed)
+    raise ValueError(
+        f"unknown backend {backend!r}; expected one of 'nim', 'mac-studio' (per ADR 011)."
+    )
 
 
 def _load_jinja_template(path: str) -> Any:

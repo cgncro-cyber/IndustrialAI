@@ -14,8 +14,12 @@ __all__ = [
     "AgentError",
     "CriticLoopLimitError",
     "LLMEndpointUnreachableError",
-    "LLMResponseMissingUsageError",
+    "LLMResponseFormatError",
     "LLMResponseParseError",
+    "LLMServerError",
+    "MissingAPIKeyError",
+    "MissingBackendConfigError",
+    "MissingUsageError",
     "MockLLMClientMisuseError",
     "RegulatoryBackendError",
 ]
@@ -50,15 +54,65 @@ class LLMResponseParseError(AgentError):
     """
 
 
-class LLMResponseMissingUsageError(AgentError):
+class MissingUsageError(AgentError):
     """The LLM response is missing the documented ``usage`` block.
 
-    The OpenAI-compatible ``/v1/completions`` contract requires a
-    ``usage`` block with ``prompt_tokens`` and ``completion_tokens``.
-    Per ADR 010 §2, a missing or partial ``usage`` is a transport
-    regression worth surfacing rather than silently emitting zero
-    counts — Phase-3 prompt iteration relies on these numbers to
-    debug latency / output-length drift.
+    The OpenAI-compatible ``/v1/completions`` and ``/v1/chat/completions``
+    contracts require a ``usage`` block with ``prompt_tokens`` and
+    ``completion_tokens``. Per ADR 010 §2, a missing or partial
+    ``usage`` is a transport regression worth surfacing rather than
+    silently emitting zero counts — Phase-3 prompt iteration relies
+    on these numbers to debug latency / output-length drift.
+
+    Surfaced by both :class:`MLXServerLLMClient` (against
+    ``/v1/completions``) and :class:`OpenAIChatLLMClient` (against
+    ``/v1/chat/completions`` on NIM and similar hosted backends per
+    ADR 011).
+    """
+
+
+class LLMServerError(AgentError):
+    """The LLM endpoint returned a non-2xx HTTP response.
+
+    Per ADR 010 §2, a single attempt is made; on any non-2xx the
+    client raises this error including the status code and a short
+    response-body excerpt so the operator can diagnose the upstream
+    issue (rate-limit / auth / model-not-available / 5xx). No retries,
+    no silent fall-through to a different backend.
+    """
+
+
+class LLMResponseFormatError(AgentError):
+    """The LLM endpoint returned a body that did not parse as JSON.
+
+    Distinct from :class:`LLMResponseParseError` (which is about
+    failing to find a JSON setpoint object inside the assistant
+    ``content`` field): this fires when the *outer* HTTP response
+    body itself is not parseable. Typically signals upstream proxy
+    misbehavior or a captive-portal interception rather than a
+    model-side issue.
+    """
+
+
+class MissingAPIKeyError(AgentError):
+    """A hosted LLM backend was constructed without an API key.
+
+    Per ADR 010 §2, an empty-string or ``None`` API key passed to
+    e.g. :class:`OpenAIChatLLMClient` raises this error at
+    construction time rather than letting the first network call
+    fail with a generic 401 — the operator sees the configuration
+    bug at startup.
+    """
+
+
+class MissingBackendConfigError(AgentError):
+    """One or more required env vars for the selected LLM backend are missing.
+
+    Raised by :func:`build_llm_client` when, for example,
+    ``backend="nim"`` is requested but ``NVIDIA_API_KEY`` is unset.
+    The error message lists **all** missing env vars in one shot so
+    the operator can fix the ``.env`` in a single pass rather than
+    discover them one error at a time.
     """
 
 

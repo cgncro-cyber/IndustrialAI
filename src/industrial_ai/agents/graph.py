@@ -88,7 +88,7 @@ class CycleOutcome:
     on every call so unit tests can observe propagation; the live MLX
     client extracts the real ``usage`` block from
     ``/v1/completions`` and raises
-    :class:`LLMResponseMissingUsageError` at the source if the server
+    :class:`MissingUsageError` at the source if the server
     omits it (ADR 010 §2). A client that legitimately has no usage
     information (e.g. a future fixture) sets ``prompt_tokens`` /
     ``completion_tokens`` on the ``LLMResponse`` to ``None`` and the
@@ -190,7 +190,7 @@ def _optimizer_node(
     # `or 0` handles a client that legitimately has no usage info
     # (LLMResponse fields default to None). MockLLMClient supplies a
     # char-count // 4 estimate so unit tests see real propagation; the
-    # live MLX client raises LLMResponseMissingUsageError if the
+    # live MLX client raises MissingUsageError if the
     # server itself fails to return a `usage` block (ADR 010 §2).
     prompt_tokens = reply.prompt_tokens or 0
     completion_tokens = reply.completion_tokens or 0
