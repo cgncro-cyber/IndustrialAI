@@ -626,7 +626,7 @@ class NemotronMarkerProtocol:
 
 @dataclass(frozen=True, slots=True)
 class NemotronExtraBodyProtocol:
-    """``extra_body`` style — Nemotron-3-Super-120B-A12B.
+    """``extra_body`` style — Nemotron-3-Super-120B-A12B (ADR 011 primary).
 
     Per NIM's catalog snippet 2026-06-01::
 
@@ -639,11 +639,32 @@ class NemotronExtraBodyProtocol:
     ``reasoning_budget`` caps the number of trace tokens before the
     model must emit the JSON answer. Default ``reasoning_budget=4096``
     matches the prompt's specification.
+
+    Sampling defaults pinned by **ADR 011 Sub-Amendment 2026-06-02**
+    from the empirical DoE on ``nominal_baseline``
+    (``data/runs/c2_doe_sampling/nemotron-3-super-120b-a12b/
+    confirmation_result.json``, N=10 mean canonical IAE = 5.75e-7,
+    95 % bootstrap CI [5.75e-7, 5.75e-7], kpis.md §1.1 PASS):
+
+    - ``default_temperature = 0.3`` (down from NIM's catalog 1.0;
+      T ∈ {0.0, 0.3, 0.6} all clear the §1.1 threshold on
+      ``nominal_baseline``, the cliff begins at T=0.8).
+    - ``max_tokens_for(reasoning=False) = 512`` (down from 8192;
+      P95 completion_tokens at the pinned cell = 189 — 512 is
+      ~2.7× headroom).
+    - ``max_tokens_for(reasoning=True) = 4096`` (down from 8192;
+      preserves the ADR 005 modal-revision policy).
+
+    CLI overrides via ``tools/run_c2_smoke.py --temperature``,
+    ``--top-p``, ``--reasoning-budget`` still take precedence —
+    the DoE driver depends on those for the variance and
+    response-surface passes.
     """
 
     reasoning_budget: int = 4096
     name: str = "nemotron_extra_body"
-    default_temperature: float = 1.0
+    #: DoE-pinned (ADR 011 Sub-Amendment 2026-06-02).
+    default_temperature: float = 0.3
 
     def apply_to_system_prompt(self, system_prompt: str, reasoning: bool) -> str:
         return system_prompt
@@ -658,7 +679,11 @@ class NemotronExtraBodyProtocol:
         return message.get("reasoning_content")
 
     def max_tokens_for(self, reasoning: bool) -> int:
-        return 8192
+        # DoE-pinned (ADR 011 Sub-Amendment 2026-06-02). 512 covers
+        # the empirical P95 = 189 tokens at the pinned cell with
+        # ~2.7x headroom; 4096 preserves the ADR-005 modal-revision
+        # budget for the reasoning=True path.
+        return 4096 if reasoning else 512
 
 
 @dataclass(frozen=True, slots=True)

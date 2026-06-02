@@ -672,9 +672,13 @@ def test_nemotron_extra_body_protocol_emits_chat_template_kwargs() -> None:
     # Reasoning trace comes back as reasoning_content.
     assert p.extract_reasoning_content({"reasoning_content": "trace"}) == "trace"
     assert p.extract_reasoning_content({"content": "x"}) is None
-    assert p.max_tokens_for(reasoning=False) == 8192
-    assert p.max_tokens_for(reasoning=True) == 8192
-    assert p.default_temperature == pytest.approx(1.0)
+    # DoE-pinned (ADR 011 Sub-Amendment 2026-06-02):
+    # max_tokens_for(False) was 8192, now 512 (P95 = 189 + ~2.7x headroom);
+    # max_tokens_for(True) was 8192, now 4096 (matches ADR-005 modal policy);
+    # default_temperature was 1.0, now 0.3 (DoE response surface).
+    assert p.max_tokens_for(reasoning=False) == 512
+    assert p.max_tokens_for(reasoning=True) == 4096
+    assert p.default_temperature == pytest.approx(0.3)
 
 
 def test_nemotron_extra_body_protocol_respects_reasoning_budget_override() -> None:
@@ -749,8 +753,9 @@ def test_openai_client_with_nemotron_extra_body_merges_chat_template_kwargs() ->
     # extra_body fields merged at top level.
     assert payload["chat_template_kwargs"] == {"enable_thinking": True}
     assert payload["reasoning_budget"] == 4096
-    # max_tokens from protocol default 8192.
-    assert payload["max_tokens"] == 8192
+    # max_tokens from protocol default: 4096 for reasoning=True
+    # (ADR 011 Sub-Amendment 2026-06-02, down from 8192).
+    assert payload["max_tokens"] == 4096
     # reasoning_content surfaced on the LLMResponse.
     assert resp.reasoning_content is not None
     assert "step 1" in resp.reasoning_content
@@ -788,9 +793,10 @@ def test_openai_client_emits_per_protocol_temperature() -> None:
     )
     client.complete(system_prompt="sys", user_prompt="usr", reasoning=True)
     captured = client._last_captured  # type: ignore[attr-defined]
-    # The 120B-default temperature is 1.0, threaded through __init__ via
-    # the helper. Sanity-check the wire value.
-    assert captured["payload"]["temperature"] == pytest.approx(1.0)
+    # 120B-default temperature is now 0.3 per ADR-011 Sub-Amendment
+    # 2026-06-02 (DoE response surface; was 1.0 from NIM's catalog
+    # snippet pre-DoE).
+    assert captured["payload"]["temperature"] == pytest.approx(0.3)
 
 
 def test_build_llm_client_rejects_unknown_backend() -> None:
@@ -849,11 +855,14 @@ def test_build_llm_client_nim_dispatches_protocol_by_model_prefix(
     monkeypatch.setenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
     c2 = build_llm_client(backend="nim")
     assert isinstance(c2.reasoning_protocol, NemotronExtraBodyProtocol)
-    assert c2.temperature == pytest.approx(1.0)
+    # 120B default is DoE-pinned to 0.3 per ADR-011 Sub-Amendment 2026-06-02.
+    assert c2.temperature == pytest.approx(0.3)
 
     monkeypatch.setenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash")
     c3 = build_llm_client(backend="nim")
     assert isinstance(c3.reasoning_protocol, DeepSeekExtraBodyProtocol)
+    # V4-Flash default still NIM-suggested 1.0; DoE deferred per
+    # the 2026-06-01 NIM upstream outage on the V4-Flash cluster.
     assert c3.temperature == pytest.approx(1.0)
 
 
@@ -883,15 +892,62 @@ def test_build_llm_client_nim_temperature_override(
     assert c.temperature == pytest.approx(0.6)
 
 
+def test_doe_pinned_120b_defaults_present_in_source(
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
+) -> None:
+    """Source-sync regression for ADR-011 Sub-Amendment 2026-06-02.
+
+    The DoE on ``nominal_baseline`` pinned the 120B sampling defaults at
+    T=0.3, top_p=0.95, reasoning_mode=off (modal default), max_tokens=512
+    for reasoning=False and 4096 for reasoning=True (preserves
+    ADR-005 modal policy). This test pins the values in source as a
+    hard regression check — any unintentional revert of the
+    Sub-Amendment will surface here, not at a downstream Phase-3 run.
+
+    Empirical support: ``data/runs/c2_doe_sampling/nemotron-3-super-
+    120b-a12b/confirmation_result.json`` N=10 mean canonical IAE
+    = 5.75e-7, 95 % CI [5.75e-7, 5.75e-7], kpis.md §1.1 PASS.
+    """
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    c = build_llm_client(backend="nim")
+    assert c.temperature == pytest.approx(0.3)
+    assert c.top_p == pytest.approx(0.95)
+    # Modal defaults from protocol.max_tokens_for (the smoke / runner
+    # consumes these via OpenAIChatLLMClient.complete when max_tokens
+    # is left None).
+    assert c.reasoning_protocol.max_tokens_for(reasoning=False) == 512
+    assert c.reasoning_protocol.max_tokens_for(reasoning=True) == 4096
+
+
+def test_doe_pin_cli_temperature_override_takes_precedence(
+    monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
+) -> None:
+    """The DoE driver depends on per-cell --temperature overriding the pinned
+    default; pin this behavior so a future "tighten the pin" refactor
+    can't accidentally remove the override surface.
+    """
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
+    monkeypatch.setenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    c = build_llm_client(backend="nim", temperature_override=0.7)
+    assert c.temperature == pytest.approx(0.7)
+
+
 def test_build_llm_client_nim_temperature_override_none_uses_protocol_default(
     monkeypatch: pytest.MonkeyPatch, _no_op_dotenv: None
 ) -> None:
-    """When temperature_override=None the protocol's default applies."""
+    """When temperature_override=None the protocol's default applies.
+
+    For 120B the protocol default is now 0.3 per ADR-011 Sub-Amendment
+    2026-06-02 (DoE-derived from N=10 confirmation on nominal_baseline).
+    """
     monkeypatch.setenv("NVIDIA_API_KEY", "k")
     monkeypatch.setenv("NVIDIA_BASE_URL", "https://x")
     monkeypatch.setenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
     c = build_llm_client(backend="nim", temperature_override=None)
-    assert c.temperature == pytest.approx(1.0)  # NemotronExtraBody default
+    assert c.temperature == pytest.approx(0.3)
 
 
 def test_build_llm_client_nim_reasoning_budget_override(
