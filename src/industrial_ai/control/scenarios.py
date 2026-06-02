@@ -40,6 +40,7 @@ __all__ = [
     "SCENARIO_NAMES",
     "ScenarioSpec",
     "build_scenario",
+    "build_scenario_at_op",
     "build_scenarios",
 ]
 
@@ -168,6 +169,78 @@ def build_scenario(name: str) -> tuple[ScenarioFn, ScenarioSpec]:
 def build_scenarios() -> dict[str, tuple[ScenarioFn, ScenarioSpec]]:
     """Return the full mapping ``{name -> (scenario_fn, spec)}`` for all five."""
     return {name: build_scenario(name) for name in SCENARIO_NAMES}
+
+
+def build_scenario_at_op(
+    name: str, *, op_F: float, op_zF: float
+) -> tuple[ScenarioFn, ScenarioSpec]:
+    """Return a ``(scenario_fn, spec)`` whose **base** values are the off-nominal OP.
+
+    Off-nominal Bucket-B-evidence pass (``docs/prompts/2026-06-02_phase3_
+    schritt_b_offnominal_screening.md``) needs the canonical 5 scenarios
+    applied at OPs other than nominal ``(F=1, zF=0.5)``. Percent-style
+    disturbances stay multiplicative against the OP base:
+
+    - ``F_step_+20pct`` → post = ``1.2 * op_F`` (not the nominal 1.2)
+    - ``F_step_-20pct`` → post = ``0.8 * op_F``
+    - ``zF_step_+10pct`` → post = ``1.1 * op_zF``
+    - ``zF_step_-10pct`` → post = ``0.9 * op_zF``
+    - ``yD_setpoint_+0p5pct`` → post = ``0.995`` (constant; y_D
+      target is operator-spec, not OP-relative)
+
+    Base values for the supervisor setpoints stay at the canonical
+    spec ``(0.99, 0.01)`` since those are the operator-level reference
+    targets that downstream KPI computation measures against (see
+    ``docs/kpis.md`` §1.1).
+    """
+    if name not in _SCENARIO_SPECS:
+        raise KeyError(f"unknown scenario {name!r}; available: {sorted(_SCENARIO_SPECS)}")
+    nominal_spec = _SCENARIO_SPECS[name]
+    p = DEFAULT_PARAMETERS
+    base = ScenarioStep(
+        y_D_setpoint=0.99,
+        x_B_setpoint=0.01,
+        F=op_F,
+        zF=op_zF,
+        qF=p.nominal_feed_liquid_fraction_qF,
+    )
+    if nominal_spec.field == "F":
+        # Scenario name encodes the percentage relative to the base.
+        if "+20pct" in name:
+            post_value = 1.2 * op_F
+        elif "-20pct" in name:
+            post_value = 0.8 * op_F
+        else:
+            raise ValueError(f"unknown F-step magnitude in {name!r}")
+    elif nominal_spec.field == "zF":
+        if "+10pct" in name:
+            post_value = 1.1 * op_zF
+        elif "-10pct" in name:
+            post_value = 0.9 * op_zF
+        else:
+            raise ValueError(f"unknown zF-step magnitude in {name!r}")
+    elif nominal_spec.field == "y_D_setpoint":
+        post_value = nominal_spec.post_step_value
+    else:
+        raise ValueError(f"unrecognised scenario field {nominal_spec.field!r}")
+
+    spec = ScenarioSpec(
+        name=nominal_spec.name,
+        field=nominal_spec.field,
+        pre_step_value=op_F
+        if nominal_spec.field == "F"
+        else (op_zF if nominal_spec.field == "zF" else nominal_spec.pre_step_value),
+        post_step_value=post_value,
+        onset_min=nominal_spec.onset_min,
+        horizon_min=nominal_spec.horizon_min,
+    )
+
+    def scenario(t: float) -> ScenarioStep:
+        if t < spec.onset_min:
+            return base
+        return _replace_field(base, spec.field, spec.post_step_value)
+
+    return scenario, spec
 
 
 def _replace_field(base: ScenarioStep, field: str, value: float) -> ScenarioStep:

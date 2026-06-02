@@ -87,3 +87,53 @@ def test_default_onset_is_five_minutes() -> None:
     for name in SCENARIO_NAMES:
         _, spec = build_scenario(name)
         assert spec.onset_min == DEFAULT_ONSET_MIN
+
+
+# ---------------------------------------------------------------------------
+# build_scenario_at_op — off-nominal screening pass
+# ---------------------------------------------------------------------------
+
+
+def test_build_scenario_at_op_F_step_uses_op_as_base() -> None:
+    """F_step_+20pct at OP F=0.8 should produce post = 1.2 * 0.8 = 0.96, not 1.2."""
+    from industrial_ai.control.scenarios import build_scenario_at_op
+
+    sc, spec = build_scenario_at_op("F_step_+20pct", op_F=0.8, op_zF=0.45)
+    pre = sc(0.0)
+    post = sc(10.0)
+    assert pre.F == 0.8
+    assert post.F == pytest.approx(0.96)
+    # zF unchanged.
+    assert pre.zF == 0.45 and post.zF == 0.45
+    # Spec reflects the post value.
+    assert spec.post_step_value == pytest.approx(0.96)
+
+
+def test_build_scenario_at_op_zF_step_multiplicative() -> None:
+    """zF_step_+10pct at OP zF=0.45 should produce post = 1.1 * 0.45 = 0.495."""
+    from industrial_ai.control.scenarios import build_scenario_at_op
+
+    sc, _ = build_scenario_at_op("zF_step_+10pct", op_F=0.8, op_zF=0.45)
+    pre = sc(0.0)
+    post = sc(10.0)
+    assert pre.zF == 0.45
+    assert post.zF == pytest.approx(0.495)
+
+
+def test_build_scenario_at_op_yD_setpoint_unchanged_by_op() -> None:
+    """y_D setpoint scenario is operator-spec relative, NOT OP-relative."""
+    from industrial_ai.control.scenarios import build_scenario_at_op
+
+    sc, _ = build_scenario_at_op("yD_setpoint_+0p5pct", op_F=0.8, op_zF=0.45)
+    pre = sc(0.0)
+    post = sc(10.0)
+    assert pre.y_D_setpoint == 0.99
+    assert post.y_D_setpoint == pytest.approx(0.995)
+
+
+def test_build_scenario_at_op_F_negative_step() -> None:
+    """F_step_-20pct at OP F=1.2 should produce post = 0.8 * 1.2 = 0.96."""
+    from industrial_ai.control.scenarios import build_scenario_at_op
+
+    sc, _ = build_scenario_at_op("F_step_-20pct", op_F=1.2, op_zF=0.55)
+    assert sc(10.0).F == pytest.approx(0.96)

@@ -13,6 +13,7 @@ from __future__ import annotations
 __all__ = [
     "AgentError",
     "CriticLoopLimitError",
+    "InfeasibleSubmetricError",
     "LLMEndpointUnreachableError",
     "LLMResponseFormatError",
     "LLMResponseParseError",
@@ -127,6 +128,19 @@ class MissingConfirmationSpecError(AgentError):
     analysis step is responsible for producing the spec. The
     confirmation driver fails fast so the operator can fix the
     upstream issue rather than re-run with a wrong / stale spec.
+    """
+
+
+class InfeasibleSubmetricError(AgentError):
+    """The requested ``--submetric disturbance_rejection`` cannot be set up.
+
+    Raised by ``tools/run_c2_smoke.py`` when the pre-stage cache marks
+    the requested operating point as infeasible (``success: False``) —
+    the column cannot be brought on-spec at that ``(F, zF)`` so the
+    sub-metric B initial condition is undefined. Per ADR 010 §2 this
+    is fail-fast rather than silent fall-back to the target_acquisition
+    sub-metric, which would mix two qualitatively different
+    measurements into the same cell.
     """
 
 

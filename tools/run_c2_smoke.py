@@ -39,6 +39,7 @@ from typing import Any
 import numpy as np
 
 from industrial_ai.agents.errors import (
+    InfeasibleSubmetricError,
     LLMEndpointUnreachableError,
     LLMResponseFormatError,
     LLMResponseParseError,
@@ -48,11 +49,20 @@ from industrial_ai.agents.errors import (
 from industrial_ai.agents.graph import AgentRunner, GraphConfig
 from industrial_ai.agents.llm_client import build_llm_client
 from industrial_ai.agents.regulatory_backend import build_regulatory_backend
+from industrial_ai.control.scenarios import SCENARIO_NAMES, build_scenario_at_op
 from industrial_ai.twin.column_a import DEFAULT_PARAMETERS
+from industrial_ai.twin.column_a.operating_window import lookup_lv_ss
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _SS_FIXTURE = _REPO_ROOT / "data" / "reference" / "skogestad_column_a_steady_state.json"
+_PRE_STAGES = _REPO_ROOT / "data" / "reference" / "off_nominal_on_spec_pre_stages.json"
 _SCENARIO = "nominal_baseline"
+
+#: Set of canonical scenario names exposed via --scenario plus the
+#: special-case ``nominal_baseline`` (no disturbance, used for sanity
+#: smokes and the source-sync verification).
+_AVAILABLE_SCENARIOS: tuple[str, ...] = ("nominal_baseline", *SCENARIO_NAMES)
+_SUBMETRICS: tuple[str, ...] = ("target_acquisition", "disturbance_rejection")
 
 
 def _model_slug(model_identifier: str) -> str:
@@ -91,6 +101,60 @@ def _default_output_path(
     if run_tag:
         leaf = f"{leaf}_{run_tag}"
     return _REPO_ROOT / "data" / "runs" / "c2_smoke" / _SCENARIO / leaf / "smoke.json"
+
+
+def _load_op_initial_state(
+    op_F: float,
+    op_zF: float,
+    submetric: str,
+) -> tuple[np.ndarray, float, float, str]:
+    """Return ``(X0, LT0, VB0, x0_source_label)`` for an off-nominal OP smoke.
+
+    For ``target_acquisition`` (per kpis.md §2.3): X0 is the LV-closed SS at
+    the off-nominal OP with NOMINAL setpoints (composition starts off-target;
+    the agent must drive it on-spec). LT/VB initialise at nominal.
+
+    For ``disturbance_rejection`` (per kpis.md §2.4): X0 is the on-spec
+    pre-staged state vector from ``off_nominal_on_spec_pre_stages.json``;
+    LT/VB initialise at the cached ``LT_star`` / ``VB_star``. The agent must
+    hold spec under disturbance. Pre-stage infeasibility raises
+    :class:`InfeasibleSubmetricError` per ADR 010 §2.
+    """
+    p = DEFAULT_PARAMETERS
+    if submetric == "target_acquisition":
+        X0 = lookup_lv_ss(F=op_F, zF=op_zF)
+        return (
+            X0,
+            p.nominal_reflux_L0_kmol_per_min,
+            p.nominal_boilup_V0_kmol_per_min,
+            "lookup_lv_ss",
+        )
+    if submetric == "disturbance_rejection":
+        with _PRE_STAGES.open() as fh:
+            cache = json.load(fh)
+        match = next(
+            (o for o in cache["ops"] if o["F"] == op_F and o["zF"] == op_zF),
+            None,
+        )
+        if match is None:
+            raise InfeasibleSubmetricError(
+                f"no pre-stage cache entry for (F={op_F}, zF={op_zF}); "
+                f"refresh {_PRE_STAGES} before running the disturbance-rejection sub-metric."
+            )
+        if not match.get("success", False):
+            raise InfeasibleSubmetricError(
+                f"pre-stage cache reports (F={op_F}, zF={op_zF}) as infeasible "
+                f"(composition_error_inf_norm={match.get('composition_error_inf_norm')}); "
+                "ADR 010 §2: no silent fall-back to target_acquisition."
+            )
+        X0 = np.asarray(match["state_vector"], dtype=np.float64)
+        return (
+            X0,
+            float(match["LT_star"]),
+            float(match["VB_star"]),
+            "off_nominal_on_spec_pre_stages",
+        )
+    raise ValueError(f"unknown submetric {submetric!r}; expected one of {_SUBMETRICS!r}")
 
 
 def _git_sha() -> str:
@@ -180,7 +244,40 @@ def main() -> int:
         "path (DoE driver uses this).",
     )
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--scenario",
+        choices=_AVAILABLE_SCENARIOS,
+        default="nominal_baseline",
+        help="Disturbance scenario per kpis.md §1.2. nominal_baseline "
+        "(default) applies no disturbance; the other five are the canonical "
+        "5-scenario set (F_step_±20pct, zF_step_±10pct, yD_setpoint_+0p5pct).",
+    )
+    parser.add_argument(
+        "--op-F",
+        type=float,
+        default=None,
+        help="Off-nominal feed flow F (paired with --op-zF). When set, the "
+        "scenario disturbance is applied multiplicatively against this OP "
+        "rather than the nominal F=1.0. Required for Schritt-B screening cells.",
+    )
+    parser.add_argument(
+        "--op-zF",
+        type=float,
+        default=None,
+        help="Off-nominal feed composition zF (paired with --op-F).",
+    )
+    parser.add_argument(
+        "--submetric",
+        choices=_SUBMETRICS,
+        default="target_acquisition",
+        help="Off-nominal sub-metric per kpis.md §2.3/§2.4. Only meaningful "
+        "when --op-F and --op-zF are set. target_acquisition: X0 from "
+        "lookup_lv_ss (off-target composition). disturbance_rejection: X0 "
+        "from off_nominal_on_spec_pre_stages (on-spec; LT/VB from cache).",
+    )
     args = parser.parse_args()
+    if (args.op_F is None) != (args.op_zF is None):
+        parser.error("--op-F and --op-zF must be set together")
 
     # Per ADR 011 the --nim-model override is a per-run knob; threading
     # it through the .env layer keeps build_llm_client's contract clean.
@@ -256,7 +353,9 @@ def main() -> int:
     print(f"output:       {output_path}")
     print(f"git_sha:      {_git_sha()}")
     # nominal_baseline has no disturbance — canonical kpis.md §1.1
-    # targets are the nominal SS values.
+    # targets are the nominal SS values. For the canonical 5 scenarios
+    # at off-nominal OPs the same canonical (0.99, 0.01) is used per
+    # the screening pass's "operator-spec target" convention.
     runner = AgentRunner(
         llm_client=llm,
         regulatory_backend=build_regulatory_backend("mpc"),
@@ -268,7 +367,51 @@ def main() -> int:
         ),
     )
 
-    X = _load_nominal_ss()
+    # Resolve OP + scenario + submetric → initial state + per-tick (F, zF, qF)
+    # function. The smoke's existing path (nominal OP, no disturbance) is
+    # preserved when --op-F is unset.
+    is_off_nominal = args.op_F is not None and args.op_zF is not None
+    if is_off_nominal:
+        X, LT0, VB0, x0_source = _load_op_initial_state(args.op_F, args.op_zF, args.submetric)
+        if args.scenario == "nominal_baseline":
+            # Hold the OP — no disturbance applied across the run.
+            def scenario_fn(t: float) -> tuple[float, float, float]:
+                return args.op_F, args.op_zF, p.nominal_feed_liquid_fraction_qF
+        else:
+            sc, _spec = build_scenario_at_op(args.scenario, op_F=args.op_F, op_zF=args.op_zF)
+
+            def scenario_fn(t: float) -> tuple[float, float, float]:
+                step = sc(t)
+                return step.F, step.zF, step.qF
+    else:
+        X = _load_nominal_ss()
+        LT0 = p.nominal_reflux_L0_kmol_per_min
+        VB0 = p.nominal_boilup_V0_kmol_per_min
+        x0_source = "nominal_ss"
+        if args.scenario == "nominal_baseline":
+            nominal_F = p.nominal_feed_F_kmol_per_min
+            nominal_qF = p.nominal_feed_liquid_fraction_qF
+
+            def scenario_fn(t: float) -> tuple[float, float, float]:
+                return nominal_F, 0.5, nominal_qF
+        else:
+            sc, _spec = build_scenario_at_op(
+                args.scenario,
+                op_F=p.nominal_feed_F_kmol_per_min,
+                op_zF=0.5,
+            )
+
+            def scenario_fn(t: float) -> tuple[float, float, float]:
+                step = sc(t)
+                return step.F, step.zF, step.qF
+
+    print(f"scenario:     {args.scenario}")
+    if is_off_nominal:
+        print(f"OP:           F={args.op_F}, zF={args.op_zF}")
+        print(f"submetric:    {args.submetric}")
+        print(f"x0_source:    {x0_source}")
+        print(f"LT0/VB0:      {LT0:.4f} / {VB0:.4f}")
+
     n_ticks = round(args.horizon_min / args.tick_min)
     print(f"\nrunning {n_ticks} supervisor ticks...")
     print(
@@ -289,16 +432,17 @@ def main() -> int:
         # ADR 010 §2: fail-fast on LLM transport / parse errors, but
         # preserve the partial diagnostic trace — those collected
         # cycles ARE the signal the prompt iteration is asking for.
+        F_tick, zF_tick, qF_tick = scenario_fn(t_min)
         try:
             out = runner.step(
                 cycle_index=i,
                 t_min=t_min,
                 X=X,
-                LT_kmol_per_min=p.nominal_reflux_L0_kmol_per_min,
-                VB_kmol_per_min=p.nominal_boilup_V0_kmol_per_min,
-                F_kmol_per_min=p.nominal_feed_F_kmol_per_min,
-                zF=0.5,
-                qF=p.nominal_feed_liquid_fraction_qF,
+                LT_kmol_per_min=LT0,
+                VB_kmol_per_min=VB0,
+                F_kmol_per_min=F_tick,
+                zF=zF_tick,
+                qF=qF_tick,
             )
         except (
             LLMResponseParseError,
@@ -380,11 +524,17 @@ def main() -> int:
     )
 
     payload: dict[str, Any] = {
-        "schema_version": 4,
+        "schema_version": 5,
         "generated_at_utc": datetime.now(tz=UTC).isoformat(),
         "git_sha": _git_sha(),
         "config": {
-            "scenario": _SCENARIO,
+            "scenario": args.scenario,
+            "op_F": args.op_F,
+            "op_zF": args.op_zF,
+            "submetric": args.submetric if is_off_nominal else None,
+            "x0_source": x0_source,
+            "LT0": LT0,
+            "VB0": VB0,
             "horizon_min": args.horizon_min,
             "tick_min": args.tick_min,
             "n_ticks": n_ticks,
@@ -401,9 +551,9 @@ def main() -> int:
             "top_p": client_top_p,
             "max_tokens": effective_max_tokens,
             "regulatory_backend": "mpc",
-            "F_kmol_per_min": p.nominal_feed_F_kmol_per_min,
-            "zF": 0.5,
-            "qF": p.nominal_feed_liquid_fraction_qF,
+            "F_kmol_per_min_nominal": p.nominal_feed_F_kmol_per_min,
+            "zF_nominal": 0.5,
+            "qF_nominal": p.nominal_feed_liquid_fraction_qF,
         },
         "aggregate": {
             "iae_mole_fraction_min": aggregate_iae,
