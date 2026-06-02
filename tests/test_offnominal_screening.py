@@ -43,20 +43,25 @@ def screening_analyzer() -> Any:
 
 
 def test_enumerate_cells_full_count(screening_driver: Any) -> None:
+    """Per kpis.md §2.5 amendment 2026-06-02: 3-corner grid (LV-singular excluded)."""
     cells = screening_driver.enumerate_cells()
-    assert len(cells) == 4 * 5 * 2 * 10 == 400
+    assert len(cells) == 3 * 5 * 2 * 10 == 300
 
 
 def test_enumerate_cells_have_unique_ids(screening_driver: Any) -> None:
     cells = screening_driver.enumerate_cells()
     ids = [c["cell_id"] for c in cells]
-    assert len(set(ids)) == 400
+    assert len(set(ids)) == 300
 
 
-def test_enumerate_cells_cover_4_corners(screening_driver: Any) -> None:
+def test_enumerate_cells_cover_3_corners_excluding_lv_singular(
+    screening_driver: Any,
+) -> None:
+    """LV-singular (0.8, 0.45) corner is NOT in the grid (kpis.md §2.5)."""
     cells = screening_driver.enumerate_cells()
     ops_seen = {(c["op_F"], c["op_zF"]) for c in cells}
-    assert ops_seen == {(0.8, 0.45), (0.8, 0.55), (1.2, 0.45), (1.2, 0.55)}
+    assert ops_seen == {(1.2, 0.45), (1.2, 0.55), (0.8, 0.55)}
+    assert (0.8, 0.45) not in ops_seen
 
 
 def test_enumerate_cells_cover_5_scenarios_2_submetrics(screening_driver: Any) -> None:
@@ -168,13 +173,14 @@ def _synth_done_cell(
 
 
 def test_aggregate_cells_collapses_seeds(screening_analyzer: Any) -> None:
+    """Use one of the 3 valid corners (LV-singular (0.8, 0.45) excluded)."""
     cells = [
-        _synth_done_cell(0.8, 0.45, "F_step_+20pct", "target_acquisition", s, 0.5 + 0.01 * s)
+        _synth_done_cell(1.2, 0.45, "F_step_+20pct", "target_acquisition", s, 0.5 + 0.01 * s)
         for s in range(10)
     ]
     aggregates = screening_analyzer._aggregate_cells(cells)
     assert len(aggregates) == 1
-    key = (0.8, 0.45, "F_step_+20pct", "target_acquisition")
+    key = (1.2, 0.45, "F_step_+20pct", "target_acquisition")
     assert aggregates[key]["n_seeds_used"] == 10
     assert aggregates[key]["mean_canonical_iae"] == pytest.approx(
         sum(0.5 + 0.01 * s for s in range(10)) / 10
@@ -182,7 +188,7 @@ def test_aggregate_cells_collapses_seeds(screening_analyzer: Any) -> None:
 
 
 def test_per_op_p95_picks_highest_scenario_mean(screening_analyzer: Any) -> None:
-    # 5 scenarios, varying means; per-OP P95 should be near the max scenario mean.
+    """5 scenarios at one valid OP (LV-singular (0.8, 0.45) excluded per §2.5)."""
     cells: list[dict[str, Any]] = []
     scenarios = [
         ("F_step_+20pct", 0.1),
@@ -191,13 +197,18 @@ def test_per_op_p95_picks_highest_scenario_mean(screening_analyzer: Any) -> None
         ("zF_step_-10pct", 0.4),
         ("yD_setpoint_+0p5pct", 0.5),
     ]
+    test_op = (1.2, 0.45)
     for scenario, base_iae in scenarios:
         for s in range(10):
-            cells.append(_synth_done_cell(0.8, 0.45, scenario, "target_acquisition", s, base_iae))
+            cells.append(
+                _synth_done_cell(
+                    test_op[0], test_op[1], scenario, "target_acquisition", s, base_iae
+                )
+            )
     aggregates = screening_analyzer._aggregate_cells(cells)
     per_op = screening_analyzer._per_op_p95(aggregates, "target_acquisition")
-    assert (0.8, 0.45) in per_op
-    p95 = per_op[(0.8, 0.45)]["p95_canonical_iae"]
+    assert test_op in per_op
+    p95 = per_op[test_op]["p95_canonical_iae"]
     assert p95 == pytest.approx(0.5, abs=0.05)  # P95 lands at/near the max=0.5
 
 
@@ -206,20 +217,19 @@ def test_classify_submetric_strong_band_when_c2_much_lower(
 ) -> None:
     c2_grid = {
         "p95_of_p95s": 0.1,
-        "per_op_values": [0.1, 0.1, 0.1, 0.1],
+        "per_op_values": [0.1, 0.1, 0.1],
     }
     per_op_c2 = {
-        (0.8, 0.45): {"ci_95_p95": [0.05, 0.15]},
-        (0.8, 0.55): {"ci_95_p95": [0.05, 0.15]},
         (1.2, 0.45): {"ci_95_p95": [0.05, 0.15]},
         (1.2, 0.55): {"ci_95_p95": [0.05, 0.15]},
+        (0.8, 0.55): {"ci_95_p95": [0.05, 0.15]},
     }
     c1_grid = {
         "grid_p95_of_p95s": 1.0,  # C1 worst is 10x C2's worst
         "grid_max_of_p95s": 1.0,
         "grid_mean_of_p95s": 1.0,
         "per_op_p95": [],
-        "n_ops": 4,
+        "n_ops": 3,
     }
     verdict = screening_analyzer._classify_submetric(
         "target_acquisition", c2_grid, c1_grid, per_op_c2
@@ -233,15 +243,14 @@ def test_classify_submetric_fails_band_when_c2_no_improvement(
 ) -> None:
     c2_grid = {
         "p95_of_p95s": 1.0,
-        "per_op_values": [1.0, 1.0, 1.0, 1.0],
+        "per_op_values": [1.0, 1.0, 1.0],
     }
     per_op_c2 = {
-        (0.8, 0.45): {"ci_95_p95": [0.9, 1.1]},
-        (0.8, 0.55): {"ci_95_p95": [0.9, 1.1]},
         (1.2, 0.45): {"ci_95_p95": [0.9, 1.1]},
         (1.2, 0.55): {"ci_95_p95": [0.9, 1.1]},
+        (0.8, 0.55): {"ci_95_p95": [0.9, 1.1]},
     }
-    c1_grid = {"grid_p95_of_p95s": 1.0, "per_op_p95": [], "n_ops": 4}
+    c1_grid = {"grid_p95_of_p95s": 1.0, "per_op_p95": [], "n_ops": 3}
     verdict = screening_analyzer._classify_submetric(
         "target_acquisition", c2_grid, c1_grid, per_op_c2
     )
@@ -265,8 +274,7 @@ def test_c1_per_op_p95_reads_baseline_files(screening_analyzer: Any) -> None:
     """End-to-end: real C1 baselines on disk produce a finite grid P95."""
     with open(_REPO_ROOT / "data/reference/c1_off_nominal_baseline.json") as fh:
         c1 = json.load(fh)
-    grid = screening_analyzer._c1_per_op_p95(
-        c1, ((0.8, 0.45), (0.8, 0.55), (1.2, 0.45), (1.2, 0.55))
-    )
-    assert grid["n_ops"] == 4
+    # The 3-corner amended grid (LV-singular (0.8, 0.45) excluded).
+    grid = screening_analyzer._c1_per_op_p95(c1, ((1.2, 0.45), (1.2, 0.55), (0.8, 0.55)))
+    assert grid["n_ops"] == 3
     assert grid["grid_p95_of_p95s"] > 0

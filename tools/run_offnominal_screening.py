@@ -1,13 +1,25 @@
 """Phase-3 Schritt B — off-nominal screening grid driver.
 
-Full Cartesian product over the kpis.md §2.5 4-OP screening grid:
+Full Cartesian product over the kpis.md §2.5 amended 3-corner screening grid:
 
-  OP               in {(0.8, 0.45), (0.8, 0.55), (1.2, 0.45), (1.2, 0.55)}    4
+  OP               in {(1.2, 0.45), (1.2, 0.55), (0.8, 0.55)}                  3
   scenario         in kpis.md §1.2 5-scenario set                              5
   submetric        in {target_acquisition, disturbance_rejection}              2
   seed             in {0, 1, ..., 9}                                          10
 
-  → 4 × 5 × 2 × 10 = 400 cells per model.
+  → 3 × 5 × 2 × 10 = 300 cells per model.
+
+The fourth corner ``(F=0.8, zF=0.45)`` is **excluded** from the
+Schritt-B screening grid per ``docs/kpis.md`` §2.5 Changelog 2026-06-02
+and ``docs/pre_submission_checklist.md`` §4.6 Empirical confirmation
+2026-06-02. The LV configuration is near-singular at that operating
+point (``cond(G_mv) ≈ 6800`` vs 150 nominal); the nominal LT/VB
+applied during target_acquisition push the plant into a catastrophic
+regime that both C1 (P95 IAE ≈ 161) and C2 cannot escape. Audit
+trail at ``docs/analyses/2026-06-02_schritt_b_failure_diagnosis.md``.
+The corner remains in the kpis.md §2.2 16-point HEADLINE grid for
+Schritt C, where the joint-architectural limit becomes part of the
+paper finding.
 
 Each cell shells out to ``tools/run_c2_smoke.py`` with --scenario,
 --op-F, --op-zF, --submetric, --seed plus --output-dir. Sampling
@@ -51,13 +63,13 @@ from industrial_ai.io import atomic_write_json
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
-#: kpis.md §2.5 4-OP corner-grid (subset of the 16-point §2.2 headline
-#: grid; the F=0.8/zF=0.475 anomaly is NOT in this set).
+#: kpis.md §2.5 amended 3-OP corner-grid (subset of the 16-point §2.2
+#: headline grid; the F=0.8/zF=0.475 anomaly and the LV-singular
+#: F=0.8/zF=0.45 corner are NOT in this set). See module docstring.
 _OPS: tuple[tuple[float, float], ...] = (
-    (0.8, 0.45),
-    (0.8, 0.55),
     (1.2, 0.45),
     (1.2, 0.55),
+    (0.8, 0.55),
 )
 
 #: kpis.md §1.2 canonical 5-scenario set.

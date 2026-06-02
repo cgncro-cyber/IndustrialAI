@@ -56,11 +56,14 @@ _SCENARIOS: tuple[str, ...] = (
     "zF_step_-10pct",
     "yD_setpoint_+0p5pct",
 )
+#: kpis.md §2.5 amended 3-OP corner-grid (Changelog 2026-06-02).
+#: The (0.8, 0.45) LV-singular corner is excluded; see
+#: tools/run_offnominal_screening.py module docstring + docs/analyses/
+#: 2026-06-02_schritt_b_failure_diagnosis.md for evidence.
 _OPS: tuple[tuple[float, float], ...] = (
-    (0.8, 0.45),
-    (0.8, 0.55),
     (1.2, 0.45),
     (1.2, 0.55),
+    (0.8, 0.55),
 )
 _SUBMETRICS: tuple[str, ...] = ("target_acquisition", "disturbance_rejection")
 
