@@ -578,6 +578,40 @@ def test_openai_client_raises_missing_usage_when_usage_block_absent() -> None:
         client.complete(system_prompt="sys", user_prompt="usr", reasoning=False)
 
 
+class _StubResponseContentNone:
+    """NIM occasionally returns content=null when the reasoning trace
+    consumed the full token budget (observed empirically at
+    T=0.8_p=1_R=on_budget_4096_S=4 during the 120B DoE sweep)."""
+
+    status_code = 200
+    text = ""
+
+    def json(self) -> dict[str, object]:
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": None,
+                        "reasoning_content": "ran out of budget mid-trace",
+                    },
+                    "finish_reason": "length",
+                }
+            ],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 8192, "total_tokens": 8292},
+        }
+
+
+def test_openai_client_raises_format_error_when_content_is_none() -> None:
+    """ADR 010 §2: content=None is fail-fast as LLMResponseFormatError,
+    not a TypeError-cascade through _parse_setpoint_json. Surfaced by the
+    120B DoE sweep cell T=0.8_p=1_R=on_budget_4096_S=4.
+    """
+    client = _build_openai_client_with_stub(_StubResponseContentNone())
+    with pytest.raises(LLMResponseFormatError) as exc_info:
+        client.complete(system_prompt="sys", user_prompt="usr", reasoning=True)
+    assert "empty or non-string content" in str(exc_info.value)
+
+
 class _StubResponseMissingChoices:
     status_code = 200
     text = ""

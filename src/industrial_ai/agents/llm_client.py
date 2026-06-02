@@ -845,6 +845,21 @@ class OpenAIChatLLMClient(LLMClient):
                 f"OpenAI-Chat-API response from {self.base_url!r} missing "
                 f"`choices[0].message.content`: {response_json!r}"
             ) from exc
+        # NIM occasionally returns content=None when the reasoning
+        # trace consumed the full token budget before the JSON answer
+        # could be emitted (observed empirically at cell
+        # T=0.8_p=1_R=on_budget_4096_S=4 on 2026-06-02). Treat that
+        # as a named transport error so the smoke driver's
+        # partial-output handler can record the cell as failed
+        # instead of crashing on a TypeError in _parse_setpoint_json.
+        if not isinstance(content, str) or not content:
+            raise LLMResponseFormatError(
+                f"OpenAI-Chat-API response from {self.base_url!r} has "
+                f"empty or non-string content (type={type(content).__name__}, "
+                f"finish_reason={message.get('finish_reason')!r}); the "
+                "reasoning trace likely consumed the full token budget "
+                "before the JSON answer could be emitted."
+            )
         usage = response_json.get("usage")
         if usage is None:
             raise MissingUsageError(

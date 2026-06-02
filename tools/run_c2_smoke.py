@@ -40,7 +40,9 @@ import numpy as np
 
 from industrial_ai.agents.errors import (
     LLMEndpointUnreachableError,
+    LLMResponseFormatError,
     LLMResponseParseError,
+    LLMServerError,
     MissingUsageError,
 )
 from industrial_ai.agents.graph import AgentRunner, GraphConfig
@@ -300,6 +302,8 @@ def main() -> int:
             )
         except (
             LLMResponseParseError,
+            LLMResponseFormatError,
+            LLMServerError,
             MissingUsageError,
             LLMEndpointUnreachableError,
         ) as exc:
