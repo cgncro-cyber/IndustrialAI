@@ -149,6 +149,19 @@ def _smoke_command(
     return cmd
 
 
+def _to_str(maybe: bytes | str | None) -> str:
+    """Coerce ``subprocess.run`` stdout/stderr to ``str``, decoding bytes if needed.
+
+    See ``tools/run_doe_sweep.py`` for the full incident note — same
+    quirk, same fix.
+    """
+    if maybe is None:
+        return ""
+    if isinstance(maybe, bytes):
+        return maybe.decode("utf-8", errors="replace")
+    return maybe
+
+
 def _classify_smoke_failure(
     returncode: int,
     stdout: str,
@@ -209,8 +222,8 @@ def _run_one_cell(
         err = completed.stderr
     except subprocess.TimeoutExpired as exc:
         rc = 124
-        out = exc.stdout or ""
-        err = (exc.stderr or "") + f"\nTimeoutExpired after {timeout_s}s"
+        out = _to_str(exc.stdout)
+        err = _to_str(exc.stderr) + f"\nTimeoutExpired after {timeout_s}s"
     smoke_path = cell_dir / "smoke.json"
     if rc == 0 and smoke_path.exists():
         cell["status"] = "done"

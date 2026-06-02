@@ -206,6 +206,25 @@ def _smoke_command(
     return cmd
 
 
+def _to_str(maybe: bytes | str | None) -> str:
+    """Coerce ``subprocess.run`` stdout/stderr to ``str``, decoding bytes if needed.
+
+    With ``text=True`` on ``subprocess.run`` the success-path streams come
+    back as ``str``, but on the ``TimeoutExpired`` branch the kernel-side
+    streams haven't been decoded yet — Python's stdlib exposes them as
+    bytes there. The DoE driver consumed those values raw and crashed
+    with a ``TypeError: can't concat str to bytes`` on the first
+    timeout (cell ``T=0.8_p=1_R=on_budget_1024_S=3`` at 06:10 UTC
+    2026-06-02). This helper is the single fix-point so both drivers
+    behave identically.
+    """
+    if maybe is None:
+        return ""
+    if isinstance(maybe, bytes):
+        return maybe.decode("utf-8", errors="replace")
+    return maybe
+
+
 def _classify_smoke_failure(
     returncode: int,
     stdout: str,
@@ -290,8 +309,8 @@ def _run_one_cell(
         stderr = completed.stderr
     except subprocess.TimeoutExpired as exc:
         returncode = 124
-        stdout = exc.stdout or ""
-        stderr = (exc.stderr or "") + f"\nTimeoutExpired after {timeout_s}s"
+        stdout = _to_str(exc.stdout)
+        stderr = _to_str(exc.stderr) + f"\nTimeoutExpired after {timeout_s}s"
     smoke_path = cell_dir / "smoke.json"
     if returncode == 0 and smoke_path.exists():
         cell["status"] = "done"

@@ -167,3 +167,58 @@ def test_classify_smoke_failure_recognises_timeout(doe_sweep: Any) -> None:
         returncode=124, stdout="", stderr="TimeoutExpired"
     )
     assert err_class == "timeout"
+
+
+def test_to_str_handles_bytes_str_and_none(doe_sweep: Any) -> None:
+    """Regression: TimeoutExpired exposes bytes despite text=True on subprocess.run.
+
+    Crashed the live 120B sweep at cell T=0.8_p=1_R=on_budget_1024_S=3
+    on 2026-06-02 with `TypeError: can't concat str to bytes`. The
+    _to_str helper decodes bytes safely and passes str through.
+    """
+    assert doe_sweep._to_str(None) == ""
+    assert doe_sweep._to_str("hello") == "hello"
+    assert doe_sweep._to_str(b"hello") == "hello"
+    assert doe_sweep._to_str(b"\xff invalid utf-8") == "� invalid utf-8"
+
+
+def test_run_one_cell_handles_timeout_with_bytes_stdout(
+    tmp_path: Path, doe_sweep: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cell handler must mark a timeout cell ``failed`` without crashing
+    when ``subprocess.run`` exposes bytes on stdout/stderr (the actual
+    Python stdlib behavior on ``TimeoutExpired`` even with text=True).
+    """
+    import subprocess
+
+    def _fake_run(*_args: Any, **_kwargs: Any) -> Any:
+        raise subprocess.TimeoutExpired(
+            cmd=["fake"],
+            timeout=10.0,
+            output=b"partial stdout bytes",
+            stderr=b"partial stderr bytes",
+        )
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+
+    cell = doe_sweep.enumerate_cells()[0]
+    manifest = doe_sweep._build_manifest("test-model")
+    manifest_path = tmp_path / "sweep_manifest.json"
+    from industrial_ai.io import atomic_write_json
+
+    atomic_write_json(manifest_path, manifest)
+    doe_sweep._run_one_cell(
+        cell,
+        model="test-model",
+        output_root=tmp_path,
+        manifest_path=manifest_path,
+        manifest=manifest,
+        timeout_s=10.0,
+        dry_run=False,
+    )
+    assert cell["status"] == "failed"
+    assert cell["error_class"] == "timeout"
+    # Classifier lowercases the excerpt for keyword matching, so
+    # compare case-insensitively. The point of the test is that the
+    # cell got marked failed without a TypeError crash.
+    assert "timeoutexpired" in (cell["error_message_excerpt"] or "").lower()
